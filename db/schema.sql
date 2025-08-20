@@ -48,6 +48,7 @@ create table if not exists public.exam_attempts (
   exam_id uuid not null references public.exams(id) on delete cascade,
   code_id uuid null references public.exam_codes(id) on delete set null,
   ip_address inet null,
+  student_name text null,
   answers jsonb not null default '{}'::jsonb,
   auto_save_data jsonb not null default '{}'::jsonb,
   completion_status text not null default 'in_progress',
@@ -123,6 +124,7 @@ end $$;
 create unique index if not exists idx_exam_codes_exam_id_code on public.exam_codes (exam_id, code);
 create index if not exists idx_questions_exam_order on public.questions (exam_id, order_index);
 create index if not exists idx_attempts_exam_started on public.exam_attempts (exam_id, started_at desc);
+create index if not exists idx_attempts_exam_student_lower on public.exam_attempts (exam_id, lower(student_name));
 create index if not exists idx_attempts_submitted_at on public.exam_attempts (submitted_at desc);
 create index if not exists idx_results_attempt_id on public.exam_results (attempt_id);
 create index if not exists idx_ips_exam_rule on public.exam_ips (exam_id, rule_type);

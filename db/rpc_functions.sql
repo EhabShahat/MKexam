@@ -123,6 +123,10 @@ DECLARE
   v_attempt_id uuid;
   v_seed text;
   v_attempt_limit int;
+  v_clean_name text;
+  v_clean_norm text;
+  v_lock_k1 int;
+  v_lock_k2 int;
 BEGIN
   select * into v_exam from public.exams e where e.id = p_exam_id;
   if not found then
@@ -155,10 +159,35 @@ BEGIN
     end if;
   end if;
 
-  -- IP attempt limiting
+  -- Attempt limiting
+  -- For ip_restricted exams: enforce per-student-per-exam using provided name (case-insensitive)
+  -- Otherwise: default to per-IP-per-exam
   if v_attempt_limit > 0 then
-    if (select count(*) from public.exam_attempts a where a.exam_id = p_exam_id and a.ip_address = p_ip) >= v_attempt_limit then
-      raise exception 'attempt_limit_reached';
+    if v_exam.access_type = 'ip_restricted' then
+      v_clean_name := nullif(btrim(p_student_name), '');
+      if v_clean_name is null then
+        raise exception 'student_name_required';
+      end if;
+      v_clean_norm := lower(v_clean_name);
+      -- Lock on (exam_id, student_name) to avoid races
+      PERFORM pg_advisory_xact_lock(hashtext(p_exam_id::text), hashtext(v_clean_norm));
+      if (
+        select count(*)
+        from public.exam_attempts a
+        where a.exam_id = p_exam_id and lower(a.student_name) = v_clean_norm
+      ) >= v_attempt_limit then
+        raise exception 'attempt_limit_reached';
+      end if;
+    else
+      -- Lock on (exam_id, ip) to avoid races
+      PERFORM pg_advisory_xact_lock(hashtext(p_exam_id::text), hashtext(host(p_ip)));
+      if (
+        select count(*) 
+        from public.exam_attempts a 
+        where a.exam_id = p_exam_id and a.ip_address = p_ip
+      ) >= v_attempt_limit then
+        raise exception 'attempt_limit_reached';
+      end if;
     end if;
   end if;
 
@@ -175,12 +204,13 @@ BEGIN
   v_seed := encode(gen_random_bytes(16), 'hex');
   v_attempt_id := gen_random_uuid();
 
-  insert into public.exam_attempts(id, exam_id, code_id, ip_address, answers, auto_save_data, completion_status, version)
+  insert into public.exam_attempts(id, exam_id, code_id, ip_address, student_name, answers, auto_save_data, completion_status, version)
   values(
     v_attempt_id,
     p_exam_id,
     case when v_exam.access_type='code_based' then v_code.id else null end,
     p_ip,
+    case when v_exam.access_type in ('ip_restricted','open') then v_clean_name else null end,
     '{}'::jsonb,
     jsonb_build_object('seed', v_seed, 'progress', jsonb_build_object('answered',0,'total',0)),
     'in_progress',
@@ -193,6 +223,20 @@ BEGIN
   end if;
 
   return query select v_attempt_id, v_seed;
+END;
+$function$;
+
+-- Compatibility wrapper: start_attempt_v2 delegates to start_attempt
+-- Ensures API calling start_attempt_v2 uses the same per-exam attempt limiting and IP rules
+CREATE OR REPLACE FUNCTION public.start_attempt_v2(p_exam_id uuid, p_code text, p_student_name text, p_ip inet)
+ RETURNS TABLE(attempt_id uuid, seed text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO public, extensions
+AS $function$
+BEGIN
+  -- Delegate to the primary implementation
+  RETURN QUERY SELECT * FROM public.start_attempt(p_exam_id, p_code, p_student_name, p_ip);
 END;
 $function$;
 
@@ -299,7 +343,7 @@ BEGIN
          a.submitted_at,
          a.completion_status,
          a.ip_address,
-         c.student_name,
+         coalesce(c.student_name, a.student_name) as student_name,
          er.score_percentage
   FROM public.exam_attempts a
   LEFT JOIN public.exam_codes c ON c.id = a.code_id
@@ -313,6 +357,7 @@ $function$;
 grant execute on function public.get_attempt_state(uuid) to anon, authenticated;
 grant execute on function public.save_attempt(uuid, jsonb, jsonb, integer) to anon, authenticated;
 grant execute on function public.start_attempt(uuid, text, text, inet) to anon, authenticated;
+grant execute on function public.start_attempt_v2(uuid, text, text, inet) to anon, authenticated;
 grant execute on function public.submit_attempt(uuid) to anon, authenticated;
 grant execute on function public.admin_list_attempts(uuid) to service_role;
 

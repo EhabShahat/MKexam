@@ -6,6 +6,8 @@ import type { AttemptState, Question } from "@/lib/types";
 import ProgressBar from "@/components/ProgressBar";
 import Timer from "@/components/Timer";
 import { shuffle } from "@/lib/randomization";
+import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
+import { t } from "@/i18n/student";
 
 // Add CSS to prevent text selection
 const noCopyStyle = `
@@ -41,6 +43,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { locale } = useStudentLocale();
 
   // Unwrap params Promise
   useEffect(() => {
@@ -252,7 +255,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-          <p className="text-[var(--muted-foreground)]">Loading your exam...</p>
+          <p className="text-[var(--muted-foreground)]">{t(locale, 'loading_exam')}</p>
         </div>
       </div>
     );
@@ -270,14 +273,14 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
             </svg>
           </div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-            Unable to Load Exam
+            {t(locale, 'unable_load_exam')}
           </h1>
           <p className="text-[var(--muted-foreground)] mb-6">{error}</p>
           <button 
             onClick={() => window.location.reload()} 
             className="btn btn-primary"
           >
-            Try Again
+            {t(locale, 'try_again')}
           </button>
         </div>
       </div>
@@ -288,7 +291,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
-          <p className="text-[var(--muted-foreground)]">No exam attempt found.</p>
+          <p className="text-[var(--muted-foreground)]">{t(locale, 'no_attempt_found')}</p>
         </div>
       </div>
     );
@@ -309,9 +312,9 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
               <div>
                 <h1 className="text-xl font-semibold text-[var(--foreground)]">{state.exam.title}</h1>
                 <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
-                  <span>Question {currentIdx + 1} of {total}</span>
+                  <span>{t(locale, 'question_of_total', { current: currentIdx + 1, total })}</span>
                   <span>•</span>
-                  <span>{answered} answered</span>
+                  <span>{t(locale, 'x_answered', { count: answered })}</span>
                   {!isOnline && (
                     <>
                       <span>•</span>
@@ -319,7 +322,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M3 12h18m-9-9v18"/>
                         </svg>
-                        Offline
+                        {t(locale, 'offline')}
                       </span>
                     </>
                   )}
@@ -333,7 +336,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                 {saveStatus === "saving" && (
                   <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
                     <div className="w-3 h-3 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    Auto-syncing...
+                    {t(locale, 'auto_syncing')}
                   </div>
                 )}
                 {saveStatus === "saved" && lastSavedAt && (
@@ -341,7 +344,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M20 6L9 17l-5-5"/>
                     </svg>
-                    Auto-saved
+                    {t(locale, 'auto_saved')}
                   </div>
                 )}
                 {saveStatus === "error" && (
@@ -351,13 +354,13 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                       <line x1="15" y1="9" x2="9" y2="15"/>
                       <line x1="9" y1="9" x2="15" y2="15"/>
                     </svg>
-                    Sync failed
+                    {t(locale, 'sync_failed')}
                   </div>
                 )}
                 {saveStatus === "idle" && (
                   <div className="flex items-center gap-2 text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
                     <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    Auto-sync enabled
+                    {t(locale, 'auto_sync_enabled')}
                   </div>
                 )}
               </div>
@@ -376,7 +379,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
           {/* Progress Bar */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[var(--foreground)]">Progress</span>
+              <span className="text-sm font-medium text-[var(--foreground)]">{t(locale, 'progress')}</span>
               <span className="text-sm text-[var(--muted-foreground)]">{progressPercentage}%</span>
             </div>
             <div className="w-full bg-[var(--muted)] rounded-full h-2">
@@ -399,12 +402,12 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
               {!sidebarCollapsed && (
-                <h2 className="font-semibold text-[var(--foreground)] block">Questions</h2>
+                <h2 className="font-semibold text-[var(--foreground)] block">{t(locale, 'questions')}</h2>
               )}
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 className="btn-icon inline-flex"
-                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={sidebarCollapsed ? t(locale, 'expand_sidebar') : t(locale, 'collapse_sidebar')}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d={sidebarCollapsed ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6"}/>
@@ -430,7 +433,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                           ? 'border-green-200 bg-green-600 text-white hover:brightness-110 hover:scale-105'
                           : 'border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--ring)] hover:scale-105'
                       }`}
-                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : ''}`}
+                      title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
                     >
                       {isAnswered && !isCurrent ? (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
@@ -463,7 +466,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                           ? 'border-green-200 bg-green-50 text-green-900 hover:brightness-95'
                           : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50 hover:translate-x-1'
                       }`}
-                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : ''}`}
+                      title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
@@ -483,7 +486,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate select-none">
-                            Question {idx + 1}
+                            {t(locale, 'question_n', { n: idx + 1 })}
                           </p>
                           <p className="text-xs text-[var(--muted-foreground)] capitalize">
                             {q.question_type.replace('_', ' ')}
@@ -527,7 +530,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))} 
                     disabled={currentIdx === 0}
                   >
-                    <span className="mr-1">←</span> Previous
+                    <span className="mr-1">←</span> {t(locale, 'previous')}
                   </button>
 
                   <div className="flex items-center gap-2">
@@ -541,7 +544,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                         <polyline points="17,21 17,13 7,13 7,21"/>
                         <polyline points="7,3 7,8 15,8"/>
                       </svg>
-                      Save
+                      {t(locale, 'save')}
                     </button>
 
                     {currentIdx === questions.length - 1 ? (
@@ -553,14 +556,14 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                         {submitting ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Submitting...
+                            {t(locale, 'submitting')}
                           </>
                         ) : (
                           <>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M20 6L9 17l-5-5"/>
                             </svg>
-                            Submit Exam
+                            {t(locale, 'submit_exam')}
                           </>
                         )}
                       </button>
@@ -570,7 +573,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                         onClick={() => setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))} 
                         disabled={currentIdx >= questions.length - 1}
                       >
-                        Next <span className="ml-1">→</span>
+                        {t(locale, 'next')} <span className="ml-1">→</span>
                       </button>
                     )}
                   </div>
@@ -584,7 +587,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                       <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
                         {idx + 1}
                       </div>
-                      <h3 className="font-medium text-[var(--foreground)]">Question {idx + 1}</h3>
+                      <h3 className="font-medium text-[var(--foreground)]">{t(locale, 'question_n', { n: idx + 1 })}</h3>
                     </div>
                     <ExamQuestion
                       q={q}
@@ -607,7 +610,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                       <polyline points="17,21 17,13 7,13 7,21"/>
                       <polyline points="7,3 7,8 15,8"/>
                     </svg>
-                    Save Progress
+                    {t(locale, 'save_progress')}
                   </button>
 
                   <button 
@@ -618,14 +621,14 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     {submitting ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Submitting...
+                        {t(locale, 'submitting')}
                       </>
                     ) : (
                       <>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M20 6L9 17l-5-5"/>
                         </svg>
-                        Submit Exam
+                        {t(locale, 'submit_exam')}
                       </>
                     )}
                   </button>
@@ -639,10 +642,10 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M20 6L9 17l-5-5"/>
                   </svg>
-                  <span className="font-medium">Exam Submitted Successfully</span>
+                  <span className="font-medium">{t(locale, 'exam_submitted_successfully')}</span>
                 </div>
                 <p className="text-green-700 text-sm mt-1">
-                  Your answers have been recorded. You can now close this page.
+                  {t(locale, 'answers_recorded_close_hint')}
                 </p>
               </div>
             )}
@@ -661,8 +664,8 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Submit Exam?</h3>
-                <p className="text-sm text-[var(--muted-foreground)]">This action cannot be undone</p>
+                <h3 className="font-semibold text-lg">{t(locale, 'submit_exam_q')}</h3>
+                <p className="text-sm text-[var(--muted-foreground)]">{t(locale, 'cannot_be_undone')}</p>
               </div>
             </div>
             
@@ -670,19 +673,19 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
               <div className="bg-[var(--muted)] rounded-lg p-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-[var(--muted-foreground)]">Total Questions:</span>
+                    <span className="text-[var(--muted-foreground)]">{t(locale, 'total_questions')}</span>
                     <span className="font-medium ml-2">{total}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--muted-foreground)]">Answered:</span>
+                    <span className="text-[var(--muted-foreground)]">{t(locale, 'answered_label')}</span>
                     <span className="font-medium ml-2">{answered}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--muted-foreground)]">Unanswered:</span>
+                    <span className="text-[var(--muted-foreground)]">{t(locale, 'unanswered_label')}</span>
                     <span className="font-medium ml-2">{total - answered}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--muted-foreground)]">Progress:</span>
+                    <span className="text-[var(--muted-foreground)]">{t(locale, 'progress_label')}</span>
                     <span className="font-medium ml-2">{progressPercentage}%</span>
                   </div>
                 </div>
@@ -691,8 +694,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
               {total - answered > 0 && (
                 <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <p className="text-orange-800 text-sm">
-                    <strong>Warning:</strong> You have {total - answered} unanswered question{total - answered !== 1 ? 's' : ''}. 
-                    These will be marked as incorrect.
+                    <strong>{t(locale, 'warning')}</strong> {t(locale, 'unanswered_warning', { count: total - answered })}
                   </p>
                 </div>
               )}
@@ -704,7 +706,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                 onClick={() => setShowSubmitConfirm(false)}
                 disabled={submitting}
               >
-                Cancel
+                {t(locale, 'cancel')}
               </button>
               <button 
                 className="btn btn-primary"
@@ -717,10 +719,10 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                 {submitting ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Submitting...
+                    {t(locale, 'submitting')}
                   </>
                 ) : (
-                  'Yes, Submit Exam'
+                  t(locale, 'confirm_submit_exam')
                 )}
               </button>
             </div>

@@ -3,6 +3,8 @@
 import React, { useId } from "react";
 import { clsx } from "clsx";
 import type { Question, QuestionType } from "@/lib/types";
+import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
+import { t as translate } from "@/i18n/student";
 
 export type AnswerValue = string | boolean | string[] | null;
 
@@ -20,8 +22,9 @@ export default function ExamQuestion({
   onSave?: () => void;
 }) {
   const id = useId();
-  const t = q.question_type as QuestionType;
+  const qType = q.question_type as QuestionType;
   const legendId = `${id}-legend`;
+  const { locale } = useStudentLocale();
   
   // Detect if text contains Arabic characters
   const hasArabic = (text: string) => /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
@@ -41,9 +44,9 @@ export default function ExamQuestion({
   
   // Check if question is answered
   const isAnswered = () => {
-    if (t === "paragraph") {
+    if (qType === "paragraph") {
       return typeof value === "string" && value.trim().length > 0;
-    } else if (t === "true_false") {
+    } else if (qType === "true_false") {
       return typeof value === "boolean";
     } else if (Array.isArray(value)) {
       return value.length > 0;
@@ -80,7 +83,7 @@ export default function ExamQuestion({
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M20 6L9 17l-5-5"/>
                 </svg>
-                Answered
+                {translate(locale, 'answered')}
               </div>
             )}
             
@@ -89,8 +92,8 @@ export default function ExamQuestion({
               <button
                 onClick={clearAnswer}
                 className="text-gray-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors"
-                title="Clear answer"
-                aria-label="Clear answer"
+                title={translate(locale, 'clear_answer')}
+                aria-label={translate(locale, 'clear_answer')}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="6" x2="6" y2="18"/>
@@ -103,12 +106,12 @@ export default function ExamQuestion({
         
         {q.points && (
           <p className="text-sm text-[var(--muted-foreground)] select-none">
-            Points: {q.points}
+            {translate(locale, 'points')} {q.points}
           </p>
         )}
       </div>
       <div className="mt-4">
-        {renderInput(t)}
+        {renderInput(qType)}
       </div>
     </div>
   );
@@ -132,7 +135,7 @@ export default function ExamQuestion({
                 onChange={() => handleChange(true)}
                 className="w-4 h-4 text-blue-600"
               />
-              <span className="font-medium">True</span>
+              <span className="font-medium">{translate(locale, 'true')}</span>
             </label>
             <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
               v === false ? 'border-blue-500 bg-blue-50' : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
@@ -146,7 +149,7 @@ export default function ExamQuestion({
                 onChange={() => handleChange(false)}
                 className="w-4 h-4 text-blue-600"
               />
-              <span className="font-medium">False</span>
+              <span className="font-medium">{translate(locale, 'false')}</span>
             </label>
           </div>
         );
@@ -198,7 +201,7 @@ export default function ExamQuestion({
         return (
           <div className="space-y-3" role="group" aria-labelledby={legendId}>
             <p className="text-sm text-[var(--muted-foreground)] mb-3">
-              Select all that apply ({v.length} selected)
+              {translate(locale, 'select_all_apply_with_count', { count: v.length })}
             </p>
             {opts.map((opt, idx) => {
               const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D...
@@ -252,17 +255,17 @@ export default function ExamQuestion({
               onChange={(e) => handleChange(e.target.value)}
               aria-labelledby={legendId}
               aria-required={q.required || undefined}
-              placeholder="Type your answer here..."
+              placeholder={translate(locale, 'type_answer_here')}
             />
             <div className="flex justify-between text-xs text-[var(--muted-foreground)]">
-              <span>Be as detailed as possible</span>
-              <span>{v.length} characters</span>
+              <span>{translate(locale, 'be_detailed')}</span>
+              <span>{translate(locale, 'characters_count', { count: v.length })}</span>
             </div>
           </div>
         );
       }
       default:
-        return <div>Unsupported question type</div>;
+        return <div>{translate(locale, 'unsupported_question_type')}</div>;
     }
   }
 }

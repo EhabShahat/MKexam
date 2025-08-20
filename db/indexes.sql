@@ -8,6 +8,7 @@
  
  -- Attempts by exam and recency
  create index if not exists idx_attempts_exam_started on public.exam_attempts (exam_id, started_at desc);
+ create index if not exists idx_attempts_exam_student_lower on public.exam_attempts (exam_id, lower(student_name));
  create index if not exists idx_attempts_submitted_at on public.exam_attempts (submitted_at desc);
  
  -- Results join support (join via attempt_id -> exam_attempts.exam_id)

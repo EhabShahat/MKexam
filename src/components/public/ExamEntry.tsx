@@ -112,6 +112,9 @@ export default function ExamEntry({ examId }: { examId: string }) {
           case "code_required":
             setError(t(locale, "err_code_required"));
             break;
+          case "student_name_required":
+            setError(t(locale, "err_student_name_required"));
+            break;
           case "invalid_code":
             setError(t(locale, "err_invalid_code"));
             break;
