@@ -19,19 +19,14 @@ export default function ExamQuestion({
   
   // Handle answer change with auto-save
   const handleChange = (newValue: AnswerValue) => {
+    // Only propagate the change; parent manages debounced/queued saving
     onChange(newValue);
-    // Trigger auto-save after a short delay
-    setTimeout(() => {
-      onSave?.();
-    }, 500);
   };
   
   // Clear answer function
   const clearAnswer = () => {
+    // Only clear locally; parent manages saving
     onChange(null);
-    setTimeout(() => {
-      onSave?.();
-    }, 500);
   };
   
   // Check if question is answered

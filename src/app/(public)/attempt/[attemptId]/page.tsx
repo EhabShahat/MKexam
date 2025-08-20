@@ -26,6 +26,15 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [version, setVersion] = useState<number>(1);
   const saveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
+  const answersRef = useRef<Record<string, AnswerValue>>({});
+  const versionRef = useRef<number>(1);
+
+  // Keep refs in sync to avoid stale closures during saves
+  useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { versionRef.current = version; }, [version]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -112,42 +121,67 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
     return () => {
       if (saveTimer.current) clearInterval(saveTimer.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, autoSaveIntervalSec, version, answers]);
+    // Only depend on state and interval seconds to avoid thrashing on every keystroke
+  }, [state, autoSaveIntervalSec]);
+
+  function scheduleSave(delay = 800) {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => { void saveNow(); }, delay);
+  }
 
   async function saveNow() {
     if (!state) return;
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
     setSaveStatus("saving");
+    inFlightRef.current = true;
     try {
-      const res = await fetch(`/api/attempts/${attemptId}/save`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answers,
-          auto_save_data: { progress: { answered, total } },
-          expected_version: version,
-        }),
-      });
-      if (res.status === 409) {
-        const payload = await res.json();
-        const latest = payload?.latest as AttemptState | undefined;
-        if (latest) {
-          setState(latest);
-          setAnswers(latest.answers as any);
-          setVersion(latest.version);
+      let retry = 0;
+      // Attempt up to 2 times if version conflict occurs
+      while (retry < 2) {
+        const payloadAnswers = answersRef.current;
+        const expectedVersion = versionRef.current;
+        const res = await fetch(`/api/attempts/${attemptId}/save`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answers: payloadAnswers,
+            auto_save_data: { progress: { answered, total } },
+            expected_version: expectedVersion,
+          }),
+        });
+        if (res.status === 409) {
+          const payload = await res.json();
+          const latest = payload?.latest as AttemptState | undefined;
+          if (latest?.version) {
+            // Update version only; keep local answers to avoid clearing in UI
+            setVersion(latest.version);
+            versionRef.current = latest.version;
+          }
+          retry++;
+          continue;
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Save failed");
+        if (data?.new_version) {
+          setVersion(data.new_version);
+          versionRef.current = data.new_version;
         }
         setSaveStatus("saved");
         setLastSavedAt(Date.now());
-        return;
+        break;
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Save failed");
-      if (data?.new_version) setVersion(data.new_version);
-      setSaveStatus("saved");
-      setLastSavedAt(Date.now());
     } catch {
-      // ignore transient errors; next tick will retry
+      // ignore transient errors; next tick/interval will retry
       setSaveStatus("error");
+    } finally {
+      inFlightRef.current = false;
+      if (queuedRef.current) {
+        queuedRef.current = false;
+        void saveNow();
+      }
     }
   }
 
@@ -171,6 +205,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
   function onAnswerChange(q: Question, val: AnswerValue) {
     setAnswers((prev) => ({ ...prev, [q.id]: val }));
+    scheduleSave(800);
   }
 
   // Persist to localStorage for recovery/offline support
