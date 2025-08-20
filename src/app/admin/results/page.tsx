@@ -1,0 +1,405 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { authFetch } from "@/lib/authFetch";
+import { useToast } from "@/components/ToastProvider";
+import ModernCard from "@/components/admin/ModernCard";
+import ModernTable from "@/components/admin/ModernTable";
+import SearchInput from "@/components/admin/SearchInput";
+import ActionButton from "@/components/admin/ActionButton";
+import StatusBadge from "@/components/admin/StatusBadge";
+
+interface Exam {
+  id: string;
+  title: string;
+  status: string;
+  access_type: string;
+}
+
+interface Attempt {
+  id: string;
+  student_name: string | null;
+  completion_status: string | null;
+  started_at: string | null;
+  submitted_at: string | null;
+  score_percentage: number | null;
+  ip_address: string | null;
+}
+
+export default function AdminResultsIndex() {
+  const [examId, setExamId] = useState<string>("");
+  const [studentFilter, setStudentFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  
+  const toast = useToast();
+
+  const examsQuery = useQuery({
+    queryKey: ["admin", "exams", "all"],
+    queryFn: async () => {
+      const res = await authFetch(`/api/admin/exams`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Load exams failed");
+      return (j.items as Exam[])?.sort((a, b) => a.title.localeCompare(b.title));
+    },
+  });
+
+  const attemptsQuery = useQuery({
+    enabled: !!examId,
+    queryKey: ["admin", "attempts", examId],
+    queryFn: async () => {
+      const res = await authFetch(`/api/admin/exams/${examId}/attempts`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Load attempts failed");
+      return j.items as Attempt[];
+    },
+  });
+
+  const selectedExam = useMemo(() => 
+    examsQuery.data?.find((e) => e.id === examId) ?? null, 
+    [examsQuery.data, examId]
+  );
+
+  const filteredAttempts = useMemo(() => {
+    const rows = attemptsQuery.data ?? [];
+    return rows.filter((attempt) => {
+      if (studentFilter && !String(attempt.student_name || "").toLowerCase().includes(studentFilter.toLowerCase())) {
+        return false;
+      }
+      if (statusFilter && String(attempt.completion_status || "") !== statusFilter) {
+        return false;
+      }
+      if (startDate && attempt.started_at) {
+        const startDateTime = new Date(startDate);
+        const attemptStart = new Date(attempt.started_at);
+        if (attemptStart < startDateTime) return false;
+      }
+      if (endDate && attempt.started_at) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999); // Include full end date
+        const attemptStart = new Date(attempt.started_at);
+        if (attemptStart > endDateTime) return false;
+      }
+      return true;
+    });
+  }, [attemptsQuery.data, studentFilter, statusFilter, startDate, endDate]);
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const res = await authFetch(`/api/admin/exams/${examId}/attempts/export`);
+      const blob = await res.blob();
+      if (!res.ok) {
+        const txt = await blob.text();
+        throw new Error(txt || "Export failed");
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `attempts_${examId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success({ title: "Export Complete", message: "CSV file downloaded successfully" });
+    } catch (e: any) {
+      toast.error({ title: "Export Failed", message: e?.message || "Unknown error" });
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportXlsx = async () => {
+    setExportingXlsx(true);
+    try {
+      const XLSX = await import("xlsx");
+      const rows = filteredAttempts.map((attempt) => ({
+        id: attempt.id,
+        student: attempt.student_name ?? "",
+        status: attempt.completion_status ?? "",
+        started_at: attempt.started_at ?? "",
+        submitted_at: attempt.submitted_at ?? "",
+        score_percentage: attempt.score_percentage ?? "",
+        ip_address: attempt.ip_address ?? "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attempts");
+      XLSX.writeFile(wb, `attempts_${examId}.xlsx`);
+      toast.success({ title: "Export Complete", message: "XLSX file saved successfully" });
+    } catch (e: any) {
+      toast.error({ title: "Export Failed", message: e?.message || "Unknown error" });
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setStudentFilter("");
+    setStatusFilter("");
+    setStartDate("");
+    setEndDate("");
+  };
+
+  const columns = [
+    { key: "attempt", label: "Attempt ID", width: "150px" },
+    { key: "student", label: "Student" },
+    { key: "status", label: "Status", width: "120px" },
+    { key: "started", label: "Started", width: "150px" },
+    { key: "submitted", label: "Submitted", width: "150px" },
+    { key: "score", label: "Score", width: "100px", align: "center" as const },
+    { key: "ip", label: "IP Address", width: "130px" },
+    { key: "actions", label: "Actions", width: "100px" },
+  ];
+
+  const renderCell = (attempt: Attempt, column: any) => {
+    switch (column.key) {
+      case "attempt":
+        return (
+          <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">
+            {attempt.id.slice(0, 8)}...
+          </code>
+        );
+      case "student":
+        return attempt.student_name || <span className="text-gray-400">Anonymous</span>;
+      case "status":
+        const status = attempt.completion_status || "incomplete";
+        return (
+          <StatusBadge 
+            status={status === "completed" ? "used" : "unused"} 
+            size="sm" 
+          />
+        );
+      case "started":
+        return attempt.started_at ? new Date(attempt.started_at).toLocaleString() : "-";
+      case "submitted":
+        return attempt.submitted_at ? new Date(attempt.submitted_at).toLocaleString() : "-";
+      case "score":
+        return attempt.score_percentage !== null ? (
+          <span className={`font-bold ${
+            attempt.score_percentage >= 80 ? 'text-green-600' :
+            attempt.score_percentage >= 60 ? 'text-yellow-600' : 'text-red-600'
+          }`}>
+            {attempt.score_percentage}%
+          </span>
+        ) : "-";
+      case "ip":
+        return (
+          <code className="bg-gray-100 px-2 py-1 rounded text-xs">
+            {attempt.ip_address || "Unknown"}
+          </code>
+        );
+      case "actions":
+        return (
+          <Link href={`/admin/results/${attempt.id}`}>
+            <ActionButton variant="secondary" size="sm">View</ActionButton>
+          </Link>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const statusOptions = Array.from(
+    new Set((attemptsQuery.data ?? []).map((a) => String(a.completion_status || "")))
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Exam Results</h1>
+          <p className="text-gray-600 mt-1">View and analyze student exam attempts</p>
+        </div>
+      </div>
+
+      {/* Exam Selection */}
+      <ModernCard>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Exam
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={examId}
+              onChange={(e) => setExamId(e.target.value)}
+            >
+              <option value="">Choose an exam to view results...</option>
+              {(examsQuery.data ?? []).map((exam) => (
+                <option key={exam.id} value={exam.id}>{exam.title}</option>
+              ))}
+            </select>
+          </div>
+          
+          {selectedExam && (
+            <div className="flex items-center gap-3">
+              <StatusBadge status={selectedExam.status as any} size="sm" />
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                {selectedExam.access_type}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {examId && (
+          <div className="flex items-center gap-3 mt-4 pt-4 border-t">
+            <Link href={`/admin/results/analysis/${examId}`}>
+              <ActionButton
+                variant="secondary"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                }
+              >
+                View Analysis
+              </ActionButton>
+            </Link>
+            <ActionButton
+              variant="secondary"
+              onClick={handleExportCsv}
+              loading={exportingCsv}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            >
+              Export CSV
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              onClick={handleExportXlsx}
+              loading={exportingXlsx}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              }
+            >
+              Export Excel
+            </ActionButton>
+          </div>
+        )}
+      </ModernCard>
+
+      {/* Filters */}
+      {examId && (
+        <ModernCard>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Student Name
+              </label>
+              <SearchInput
+                placeholder="Filter by student name"
+                value={studentFilter}
+                onChange={setStudentFilter}
+                className="w-full"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">Any status</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status || "Incomplete"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Date
+              </label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                End Date
+              </label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex items-end">
+              <ActionButton
+                variant="secondary"
+                onClick={clearFilters}
+                className="w-full"
+              >
+                Clear Filters
+              </ActionButton>
+            </div>
+          </div>
+          
+          {(studentFilter || statusFilter || startDate || endDate) && (
+            <div className="mt-4 pt-4 border-t text-sm text-gray-600">
+              Showing {filteredAttempts.length} of {attemptsQuery.data?.length || 0} attempts
+            </div>
+          )}
+        </ModernCard>
+      )}
+
+      {/* Results Table */}
+      {!examId && (
+        <ModernCard>
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">📊</div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Exam</h3>
+            <p className="text-gray-600">Choose an exam from the dropdown above to view student results</p>
+          </div>
+        </ModernCard>
+      )}
+
+      {examId && (
+        <ModernTable
+          columns={columns}
+          data={filteredAttempts}
+          renderCell={renderCell}
+          loading={attemptsQuery.isLoading}
+          emptyMessage={
+            attemptsQuery.data?.length === 0
+              ? "No attempts found for this exam"
+              : "No attempts match your current filters"
+          }
+        />
+      )}
+
+      {examId && attemptsQuery.error && (
+        <ModernCard>
+          <div className="text-center text-red-600">
+            <p className="font-semibold">Error loading attempts</p>
+            <p className="text-sm mt-1">{(attemptsQuery.error as any).message}</p>
+          </div>
+        </ModernCard>
+      )}
+    </div>
+  );
+}

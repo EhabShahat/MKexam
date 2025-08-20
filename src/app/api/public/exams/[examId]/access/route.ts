@@ -1,0 +1,73 @@
+import { NextRequest, NextResponse } from "next/server";
+import { cookies, headers } from "next/headers";
+import { supabaseServer } from "@/lib/supabase/server";
+import { getClientIp } from "@/lib/ip";
+
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ examId: string }> }
+) {
+  try {
+    const { examId } = await ctx.params;
+    const body = await req.json().catch(() => ({}));
+    const code: string | null = body?.code ?? null;
+    const studentName: string | null = body?.studentName ?? null;
+    const hdrs = await headers();
+    const ip = getClientIp(hdrs);
+
+    const supabase = supabaseServer();
+    const { data, error } = await supabase.rpc("start_attempt_v2", {
+      p_exam_id: examId,
+      p_code: code,
+      p_student_name: studentName,
+      p_ip: ip,
+    });
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    const attemptId: string | undefined = row?.attempt_id;
+    if (!attemptId) {
+      return NextResponse.json({ error: "no_attempt" }, { status: 400 });
+    }
+
+    // Get student name for the response
+    let finalStudentName = studentName;
+    if (code) {
+      // Use only the global students table
+      const { data: studentData } = await supabase
+        .from("students")
+        .select("student_name")
+        .eq("code", code)
+        .single();
+      
+      if (studentData?.student_name) {
+        finalStudentName = studentData.student_name;
+      }
+    }
+
+    // Set a session cookie with attemptId
+    const cookieStore = await cookies();
+    cookieStore.set("attemptId", attemptId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 3, // 3h safe default
+    });
+
+    return NextResponse.json({ 
+      attemptId,
+      studentName: finalStudentName 
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message || "unexpected_error" },
+      { status: 500 }
+    );
+  }
+}

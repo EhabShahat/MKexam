@@ -1,0 +1,86 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+
+export default function Timer({
+  startedAt,
+  durationMinutes,
+  examEndsAt,
+  onExpire,
+  disabled,
+}: {
+  startedAt: string;
+  durationMinutes: number | null;
+  examEndsAt: string | null;
+  onExpire: () => void;
+  disabled?: boolean;
+}) {
+  const [now, setNow] = useState<number>(Date.now());
+  const firedRef = useRef(false);
+
+  const deadline = useMemo(() => {
+    const deadlines: number[] = [];
+    if (durationMinutes && durationMinutes > 0) {
+      deadlines.push(new Date(startedAt).getTime() + durationMinutes * 60_000);
+    }
+    if (examEndsAt) {
+      deadlines.push(new Date(examEndsAt).getTime());
+    }
+    if (deadlines.length === 0) return null;
+    return Math.min(...deadlines);
+  }, [startedAt, durationMinutes, examEndsAt]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const remainingMs = deadline ? Math.max(0, deadline - now) : null;
+
+  useEffect(() => {
+    if (!deadline || disabled) return;
+    if (remainingMs === 0 && !firedRef.current) {
+      firedRef.current = true;
+      onExpire();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingMs, deadline, disabled]);
+
+  if (!deadline) return null;
+
+  const text = formatDuration(remainingMs ?? 0);
+  const low = (remainingMs ?? 0) <= 60_000;
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm font-medium ${
+        low 
+          ? "bg-red-100 text-red-700 border border-red-200" 
+          : "bg-[var(--muted)] text-[var(--foreground)] border border-[var(--border)]"
+      }`}
+      role="timer"
+      aria-live="polite"
+      aria-label="Time remaining"
+      aria-atomic="true"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12,6 12,12 16,14"/>
+      </svg>
+      {text}
+    </div>
+  );
+}
+
+export function formatDuration(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
+function pad(n: number) {
+  return n.toString().padStart(2, "0");
+}

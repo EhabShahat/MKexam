@@ -1,0 +1,273 @@
+"use client";
+
+import React, { useId } from "react";
+import { clsx } from "clsx";
+import type { Question, QuestionType } from "@/lib/types";
+
+export type AnswerValue = string | boolean | string[] | null;
+
+export default function ExamQuestion({
+  q,
+  value,
+  onChange,
+  disabled,
+  onSave,
+}: {
+  q: Question;
+  value: AnswerValue;
+  onChange: (val: AnswerValue) => void;
+  disabled?: boolean;
+  onSave?: () => void;
+}) {
+  const id = useId();
+  const t = q.question_type as QuestionType;
+  const legendId = `${id}-legend`;
+  
+  // Detect if text contains Arabic characters
+  const hasArabic = (text: string) => /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+  const questionHasArabic = hasArabic(q.question_text);
+  
+  // Handle answer change with auto-save
+  const handleChange = (newValue: AnswerValue) => {
+    onChange(newValue);
+    // Trigger auto-save after a short delay
+    setTimeout(() => {
+      onSave?.();
+    }, 500);
+  };
+  
+  // Clear answer function
+  const clearAnswer = () => {
+    onChange(null);
+    setTimeout(() => {
+      onSave?.();
+    }, 500);
+  };
+  
+  // Check if question is answered
+  const isAnswered = () => {
+    if (t === "paragraph") {
+      return typeof value === "string" && value.trim().length > 0;
+    } else if (t === "true_false") {
+      return typeof value === "boolean";
+    } else if (Array.isArray(value)) {
+      return value.length > 0;
+    } else if (typeof value === "string") {
+      return value.length > 0;
+    }
+    return false;
+  };
+
+  return (
+    <div 
+      className="space-y-4" 
+      aria-required={q.required || undefined}
+      onCopy={(e) => e.preventDefault()} 
+      onCut={(e) => e.preventDefault()}
+    >
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-4">
+          <h3 
+            id={legendId} 
+            className={`text-lg font-medium text-[var(--foreground)] leading-relaxed flex-1 select-none ${
+              questionHasArabic ? 'arabic-text' : ''
+            }`}
+            dir={questionHasArabic ? 'rtl' : 'ltr'}
+          >
+            {q.required && <span className="text-red-500 mr-1">*</span>}
+            {q.question_text}
+          </h3>
+          
+          <div className="flex items-center gap-2">
+            {/* Answer status indicator */}
+            {isAnswered() && (
+              <div className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-medium">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                Answered
+              </div>
+            )}
+            
+            {/* Clear button */}
+            {isAnswered() && !disabled && (
+              <button
+                onClick={clearAnswer}
+                className="text-gray-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors"
+                title="Clear answer"
+                aria-label="Clear answer"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {q.points && (
+          <p className="text-sm text-[var(--muted-foreground)] select-none">
+            Points: {q.points}
+          </p>
+        )}
+      </div>
+      <div className="mt-4">
+        {renderInput(t)}
+      </div>
+    </div>
+  );
+
+  function renderInput(type: QuestionType) {
+    switch (type) {
+      case "true_false": {
+        // Don't convert to Boolean - keep null/undefined as no selection
+        const v = value as boolean | null | undefined;
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-labelledby={legendId}>
+            <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
+              v === true ? 'border-blue-500 bg-blue-50' : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
+            }`}>
+              <input
+                type="radio"
+                name={id}
+                disabled={disabled}
+                required={q.required}
+                checked={v === true}
+                onChange={() => handleChange(true)}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium">True</span>
+            </label>
+            <label className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
+              v === false ? 'border-blue-500 bg-blue-50' : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
+            }`}>
+              <input
+                type="radio"
+                name={id}
+                disabled={disabled}
+                required={q.required}
+                checked={v === false}
+                onChange={() => handleChange(false)}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="font-medium">False</span>
+            </label>
+          </div>
+        );
+      }
+      case "single_choice": {
+        const opts = (q.options as string[] | null) ?? [];
+        const v = (value as string) ?? "";
+        return (
+          <div className="space-y-3" role="radiogroup" aria-labelledby={legendId}>
+            {opts.map((opt, idx) => {
+              const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D...
+              const isSelected = v === opt;
+              return (
+                <label key={idx} className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition-all ${
+                  isSelected ? 'border-blue-500 bg-blue-50' : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
+                }`}>
+                  <input
+                    type="radio"
+                    name={id}
+                    disabled={disabled}
+                    required={q.required}
+                    checked={isSelected}
+                    onChange={() => handleChange(opt)}
+                    className="w-4 h-4 text-blue-600 mt-1"
+                  />
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                    }`}>
+                      {optionLetter}
+                    </div>
+                    <span 
+                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text' : ''}`}
+                      dir={hasArabic(opt) ? 'rtl' : 'ltr'}
+                    >
+                      {opt}
+                    </span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
+      case "multiple_choice":
+      case "multi_select": {
+        const opts = (q.options as string[] | null) ?? [];
+        const v = Array.isArray(value) ? (value as string[]) : [];
+        return (
+          <div className="space-y-3" role="group" aria-labelledby={legendId}>
+            <p className="text-sm text-[var(--muted-foreground)] mb-3">
+              Select all that apply ({v.length} selected)
+            </p>
+            {opts.map((opt, idx) => {
+              const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D...
+              const isSelected = v.includes(opt);
+              return (
+                <label key={idx} className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition-all ${
+                  isSelected ? 'border-blue-500 bg-blue-50' : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
+                }`}>
+                  <input
+                    type="checkbox"
+                    disabled={disabled}
+                    checked={isSelected}
+                    onChange={(e) => {
+                      const newValue = e.target.checked ? [...v, opt] : v.filter((x) => x !== opt);
+                      handleChange(newValue);
+                    }}
+                    className="w-4 h-4 text-blue-600 mt-1"
+                  />
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-medium ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                    }`}>
+                      {optionLetter}
+                    </div>
+                    <span 
+                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text' : ''}`}
+                      dir={hasArabic(opt) ? 'rtl' : 'ltr'}
+                    >
+                      {opt}
+                    </span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
+      case "paragraph": {
+        const v = (value as string) ?? "";
+        return (
+          <div className="space-y-2">
+            <textarea
+              className={clsx(
+                "w-full border border-[var(--border)] rounded-lg p-4 text-[var(--foreground)] bg-[var(--input)] resize-none transition-all",
+                "focus:border-[var(--ring)] focus:ring-2 focus:ring-[var(--ring)]/20 focus:outline-none",
+                disabled && "opacity-70 cursor-not-allowed"
+              )}
+              rows={6}
+              disabled={disabled}
+              value={v}
+              onChange={(e) => handleChange(e.target.value)}
+              aria-labelledby={legendId}
+              aria-required={q.required || undefined}
+              placeholder="Type your answer here..."
+            />
+            <div className="flex justify-between text-xs text-[var(--muted-foreground)]">
+              <span>Be as detailed as possible</span>
+              <span>{v.length} characters</span>
+            </div>
+          </div>
+        );
+      }
+      default:
+        return <div>Unsupported question type</div>;
+    }
+  }
+}
