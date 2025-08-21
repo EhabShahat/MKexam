@@ -231,7 +231,7 @@ export default function AdminSettingsPage() {
   if (settingsQuery.error) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <div className="text-2xl font-bold text-gray-900">Settings</div>
         <ModernCard>
           <div className="text-center text-red-600">
             <p className="font-semibold">Error loading settings</p>
@@ -245,7 +245,7 @@ export default function AdminSettingsPage() {
   if ((settingsQuery.data as any)?.notConfigured) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <div className="text-2xl font-bold text-gray-900">Settings</div>
         <ModernCard>
           <div className="text-center py-8">
             <div className="text-4xl mb-4">⚙️</div>
@@ -712,7 +712,7 @@ function MessagingSettings({ currentSettings, updateSetting }: {
             rows={4}
             value={currentSettings.whatsapp_default_template ?? ""}
             onChange={(e) => updateSetting("whatsapp_default_template", e.target.value)}
-            placeholder="Hello {name}! Your exam code is: {code}"
+            placeholder="Hello {name}! Your code is: {code}"
           />
           <p className="text-xs text-gray-500 mt-1">
             Use {"{name}"} and {"{code}"} as placeholders
