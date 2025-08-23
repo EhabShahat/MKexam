@@ -429,15 +429,15 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </div>
       </header>
 
-      <div className="flex flex-row h-full overflow-hidden">
+      <div className="flex flex-row overflow-x-hidden">
         {/* Sidebar - Question Navigation */}
         <aside
-          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0 h-full overflow-hidden
+          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0 sticky top-16 self-start overflow-visible flex flex-col max-h-[calc(100vh-4rem)]
           ${sidebarCollapsed
             ? 'basis-[48px] sm:basis-[48px] lg:basis-[64px] min-w-[48px]'
             : 'basis-[5%] sm:basis-[5%] md:basis-[5%] lg:basis-[15%] xl:basis-[18%] 2xl:basis-[20%] min-w-[40px] lg:min-w-[240px]'}
         `}>
-          <div className="p-2">
+          <div className="p-2 h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
               {!sidebarCollapsed && (
                 <h2 className="font-semibold text-[var(--foreground)] block">{t(locale, 'questions')}</h2>
@@ -455,7 +455,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
             {/* Mobile and Collapsed View */}
             {sidebarCollapsed ? (
-              <div className="flex flex-col gap-2 pb-0">
+              <div className="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 pr-1">
                 {questions.map((q, idx) => {
                   const isAnswered = isQuestionAnswered(q, answers[q.id]);
                   const isCurrent = idx === currentIdx;
@@ -482,7 +482,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
             {/* Expanded View */}
             {!sidebarCollapsed && (
-              <div className="space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 pb-2">
                 {questions.map((q, idx) => {
                   const isAnswered = isQuestionAnswered(q, answers[q.id]);
                   const isCurrent = idx === currentIdx;
@@ -512,7 +512,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </aside>
 
         {/* Main Content */}
-        <main ref={mainRef} className="flex-1 min-w-0 h-full p-4 sm:p-6 overflow-y-auto scroll-smooth no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
+        <main ref={mainRef} className="flex-1 min-w-0 p-4 sm:p-6 scroll-smooth no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
           <div className="max-w-4xl mx-auto">
             {displayMode === "per_question" ? (
               <div className="space-y-6">
