@@ -44,6 +44,10 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { locale } = useStudentLocale();
+  const mainRef = useRef<HTMLDivElement | null>(null);
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   // Unwrap params Promise
   useEffect(() => {
@@ -263,6 +267,26 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
     } catch {}
   }, []);
 
+  // Cleanup highlight timer
+  useEffect(() => {
+    return () => { if (flashTimer.current) clearTimeout(flashTimer.current); };
+  }, []);
+
+  function handleJumpTo(idx: number) {
+    setCurrentIdx(idx);
+    if (displayMode === "per_question") return;
+    const q = questions[idx];
+    if (!q) return;
+    const el = questionRefs.current[q.id];
+    if (el) {
+      try { el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" }); } catch {}
+      setFlashId(q.id);
+      try { (el as any)?.focus?.({ preventScroll: true }); } catch {}
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setFlashId(null), 800);
+    }
+  }
+
   if (!attemptId || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
@@ -314,7 +338,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const progressPercentage = total ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)] grid grid-rows-[auto,1fr]">
       {/* Add style tag for no-copy functionality */}
       <style dangerouslySetInnerHTML={{ __html: noCopyStyle }} />
       {/* Header */}
@@ -405,10 +429,10 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </div>
       </header>
 
-      <div className="flex flex-row min-h-[calc(100vh-200px)]">
+      <div className="flex flex-row h-full overflow-hidden">
         {/* Sidebar - Question Navigation */}
         <aside
-          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0
+          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0 h-full overflow-hidden
           ${sidebarCollapsed
             ? 'basis-[48px] sm:basis-[48px] lg:basis-[64px] min-w-[48px]'
             : 'basis-[5%] sm:basis-[5%] md:basis-[5%] lg:basis-[15%] xl:basis-[18%] 2xl:basis-[20%] min-w-[40px] lg:min-w-[240px]'}
@@ -431,7 +455,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
             {/* Mobile and Collapsed View */}
             {sidebarCollapsed ? (
-              <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-200px)] pb-0">
+              <div className="flex flex-col gap-2 pb-0">
                 {questions.map((q, idx) => {
                   const isAnswered = isQuestionAnswered(q, answers[q.id]);
                   const isCurrent = idx === currentIdx;
@@ -439,7 +463,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                   return (
                     <button
                       key={q.id}
-                      onClick={() => setCurrentIdx(idx)}
+                      onClick={() => handleJumpTo(idx)}
                       className={`flex-shrink-0 w-6 h-6 rounded-full border text-xs font-medium transition-all duration-200 flex items-center justify-center select-none ${
                         isCurrent 
                           ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm scale-110' 
@@ -458,7 +482,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
             {/* Expanded View */}
             {!sidebarCollapsed && (
-              <div className="space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
+              <div className="space-y-2">
                 {questions.map((q, idx) => {
                   const isAnswered = isQuestionAnswered(q, answers[q.id]);
                   const isCurrent = idx === currentIdx;
@@ -466,7 +490,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                   return (
                     <button
                       key={q.id}
-                      onClick={() => setCurrentIdx(idx)}
+                      onClick={() => handleJumpTo(idx)}
                       className={`w-full flex justify-center p-1 rounded-full border transition-all duration-200 ${
                         isCurrent 
                           ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm' 
@@ -488,7 +512,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
+        <main ref={mainRef} className="flex-1 min-w-0 h-full p-4 sm:p-6 overflow-y-auto scroll-smooth no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
           <div className="max-w-4xl mx-auto">
             {displayMode === "per_question" ? (
               <div className="space-y-6">
@@ -564,39 +588,48 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
               </div>
             ) : (
               <div className="space-y-6">
-                {questions.map((q, idx) => (
-                  <div key={q.id} className="bg-[var(--card)] rounded-lg border border-[var(--border)] p-6 shadow-sm hover:shadow-md transition-all duration-300">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                        {idx + 1}
-                      </div>
-                      <h3 className="font-medium text-[var(--foreground)]">{t(locale, 'question_n', { n: idx + 1 })}</h3>
+                {questions.map((q, idx) => {
+                  const isFlash = flashId === q.id;
+                  return (
+                    <div
+                      key={q.id}
+                      ref={(el) => {
+                        questionRefs.current[q.id] = el;
+                      }}
+                      tabIndex={-1}
+                      className={`outline-none bg-[var(--card)] rounded-lg border border-[var(--border)] p-6 shadow-sm transition-all duration-300 ${
+                        isFlash
+                          ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[var(--background)]'
+                          : 'hover:shadow-md'
+                      }`}
+                    >
+                      <ExamQuestion
+                        q={q}
+                        value={answers[q.id] as AnswerValue}
+                        onChange={(v) => onAnswerChange(q, v)}
+                        onSave={saveNow}
+                        disabled={disabled}
+                      />
                     </div>
-                    <ExamQuestion
-                      q={q}
-                      value={answers[q.id] as AnswerValue}
-                      onChange={(v) => onAnswerChange(q, v)}
-                      onSave={saveNow}
-                      disabled={disabled}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
 
+                {/* Full-list actions */}
                 <div className="flex items-center justify-center gap-4 pt-6">
-                  <button 
+                  <button
                     className="btn btn-outline"
                     onClick={() => saveNow()}
                     disabled={disabled}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                      <polyline points="17,21 17,13 7,13 7,21"/>
-                      <polyline points="7,3 7,8 15,8"/>
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                      <polyline points="17,21 17,13 7,13 7,21" />
+                      <polyline points="7,3 7,8 15,8" />
                     </svg>
                     {t(locale, 'save_progress')}
                   </button>
 
-                  <button 
+                  <button
                     className="btn btn-primary"
                     onClick={() => setShowSubmitConfirm(true)}
                     disabled={disabled || submitting}
@@ -609,7 +642,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     ) : (
                       <>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5"/>
+                          <path d="M20 6L9 17l-5-5" />
                         </svg>
                         {t(locale, 'submit_exam')}
                       </>
@@ -618,7 +651,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                 </div>
               </div>
             )}
-
+            
             {disabled && (
               <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
                 <div className="flex items-center justify-center gap-2 text-green-800">
