@@ -9,6 +9,8 @@
  create index if not exists idx_attempts_exam_started on public.exam_attempts (exam_id, started_at desc);
  create index if not exists idx_attempts_exam_student_lower on public.exam_attempts (exam_id, lower(student_name));
  create index if not exists idx_attempts_submitted_at on public.exam_attempts (submitted_at desc);
+ -- Fast per-IP limiting by exam
+ create index if not exists idx_attempts_exam_ip on public.exam_attempts (exam_id, ip_address);
  
  -- Results join support (join via attempt_id -> exam_attempts.exam_id)
  create index if not exists idx_results_attempt_id on public.exam_results (attempt_id);

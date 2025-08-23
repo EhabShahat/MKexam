@@ -470,10 +470,10 @@ export default function AdminSettingsPage() {
               rows={4}
               value={currentSettings.whatsapp_default_template ?? ""}
               onChange={(e) => updateSetting("whatsapp_default_template", e.target.value)}
-              placeholder="Hello {name}! Your exam code is: {code}"
+              placeholder="Hello {name}! Your exam code is: {code}. Exam window: {start_time} – {end_time}"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Use {"{name}"} and {"{code}"} as placeholders
+              Use {"{name}"}, {"{code}"}, {"{start_time}"}, and {"{end_time}"} as placeholders
             </p>
           </div>
 

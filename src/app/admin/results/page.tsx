@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
@@ -59,6 +59,14 @@ export default function AdminResultsIndex() {
       return j.items as Attempt[];
     },
   });
+
+  // Auto-select the last published exam (there is at most one published exam by DB constraint)
+  useEffect(() => {
+    if (!examId && examsQuery.data?.length) {
+      const published = examsQuery.data.find((e) => e.status === "published");
+      if (published) setExamId(published.id);
+    }
+  }, [examId, examsQuery.data]);
 
   const selectedExam = useMemo(() => 
     examsQuery.data?.find((e) => e.id === examId) ?? null, 
@@ -219,23 +227,38 @@ export default function AdminResultsIndex() {
         </div>
       </div>
 
-      {/* Exam Selection */}
+      {/* Exam Selection */
+      }
       <ModernCard>
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Exam
+              Exams
             </label>
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={examId}
-              onChange={(e) => setExamId(e.target.value)}
-            >
-              <option value="">Choose an exam to view results...</option>
+            <div className="flex flex-wrap gap-2">
               {(examsQuery.data ?? []).map((exam) => (
-                <option key={exam.id} value={exam.id}>{exam.title}</option>
+                <button
+                  key={exam.id}
+                  type="button"
+                  onClick={() => setExamId(exam.id)}
+                  className={`px-3 py-2 rounded-lg border text-sm transition ${
+                    examId === exam.id
+                      ? 'bg-blue-600 text-white border-blue-600 shadow'
+                      : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{exam.title}</span>
+                  {exam.status === 'published' && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">
+                      Published
+                    </span>
+                  )}
+                </button>
               ))}
-            </select>
+              {(!examsQuery.isLoading && (examsQuery.data ?? []).length === 0) && (
+                <span className="text-sm text-gray-500">No exams found</span>
+              )}
+            </div>
           </div>
           
           {selectedExam && (
@@ -373,7 +396,7 @@ export default function AdminResultsIndex() {
           <div className="text-center py-12">
             <div className="text-4xl mb-4">📊</div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Exam</h3>
-            <p className="text-gray-600">Choose an exam from the dropdown above to view student results</p>
+            <p className="text-gray-600">Choose an exam from the buttons above to view student results</p>
           </div>
         </ModernCard>
       )}

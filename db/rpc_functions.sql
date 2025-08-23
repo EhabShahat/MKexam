@@ -163,26 +163,21 @@ BEGIN
     end if;
   end if;
 
+  -- Prepare student name for ip/open modes (kept for storage/UX)
+  if v_exam.access_type = 'ip_restricted' then
+    v_clean_name := nullif(btrim(p_student_name), '');
+    if v_clean_name is null then
+      raise exception 'student_name_required';
+    end if;
+  elsif v_exam.access_type = 'open' then
+    v_clean_name := nullif(btrim(p_student_name), '');
+  end if;
+
   -- Attempt limiting
-  -- For ip_restricted exams: enforce per-student-per-exam using provided name (case-insensitive)
-  -- Otherwise: default to per-IP-per-exam
+  -- code_based: no IP-based limiting (each code limited via student_exam_attempts)
+  -- ip_restricted/open: enforce per-IP-per-exam using attempt_limit from settings
   if v_attempt_limit > 0 then
-    if v_exam.access_type = 'ip_restricted' then
-      v_clean_name := nullif(btrim(p_student_name), '');
-      if v_clean_name is null then
-        raise exception 'student_name_required';
-      end if;
-      v_clean_norm := lower(v_clean_name);
-      -- Lock on (exam_id, student_name) to avoid races
-      PERFORM pg_advisory_xact_lock(hashtext(p_exam_id::text), hashtext(v_clean_norm));
-      if (
-        select count(*)
-        from public.exam_attempts a
-        where a.exam_id = p_exam_id and lower(a.student_name) = v_clean_norm
-      ) >= v_attempt_limit then
-        raise exception 'attempt_limit_reached';
-      end if;
-    else
+    if v_exam.access_type in ('ip_restricted','open') then
       -- Lock on (exam_id, ip) to avoid races
       PERFORM pg_advisory_xact_lock(hashtext(p_exam_id::text), hashtext(host(p_ip)));
       if (
