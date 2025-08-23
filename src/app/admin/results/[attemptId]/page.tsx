@@ -12,7 +12,7 @@ export default function AdminAttemptDetails() {
     queryKey: ["admin", "attempt", attemptId, "state"],
     enabled: !!attemptId,
     queryFn: async () => {
-      const res = await authFetch(`/api/attempts/${attemptId}/state`);
+      const res = await authFetch(`/api/admin/attempts/${attemptId}/state`);
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Load attempt state failed");
       return j;
@@ -139,9 +139,13 @@ function isAutoGradable(t: QType) {
 function normStr(s: unknown) {
   return typeof s === "string" ? s.trim() : String(s ?? "");
 }
+function toStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => normStr(x));
+}
 function arraysEqualIgnoreOrder(a: unknown, b: unknown) {
-  const aa = Array.isArray(a) ? a.slice().sort() : [] as unknown[];
-  const bb = Array.isArray(b) ? b.slice().sort() : [] as unknown[];
+  const aa = toStringArray(a).slice().sort();
+  const bb = toStringArray(b).slice().sort();
   if (aa.length !== bb.length) return false;
   for (let i = 0; i < aa.length; i++) if (aa[i] !== bb[i]) return false;
   return true;
@@ -150,8 +154,23 @@ function isCorrect(question: any, answer: unknown): boolean | null {
   const t = question.question_type as QType;
   const correct = question.correct_answers;
   if (!isAutoGradable(t)) return null;
-  if (t === "true_false") return Boolean(answer) === Boolean(correct);
-  if (t === "single_choice") return normStr(answer) === normStr(correct);
+  // true/false: treat null/undefined answer as incorrect; support correct_answers as boolean, string, or [val]
+  if (t === "true_false") {
+    const ansBool = typeof answer === "boolean" ? answer : null;
+    if (ansBool === null) return false;
+    const corrRaw = Array.isArray(correct) && correct.length === 1 ? correct[0] : correct;
+    const corrStr = normStr(corrRaw).toLowerCase();
+    const corrBool = corrStr === "true" ? true : corrStr === "false" ? false : typeof corrRaw === "boolean" ? corrRaw : null;
+    if (corrBool === null) return false;
+    return ansBool === corrBool;
+  }
+  // single choice may store correct_answers as scalar or single-element array
+  if (t === "single_choice") {
+    const ansStr = typeof answer === "string" ? normStr(answer) : "";
+    if (!ansStr) return false;
+    const corrRaw = Array.isArray(correct) && correct.length === 1 ? correct[0] : correct;
+    return ansStr === normStr(corrRaw);
+  }
   if (t === "multiple_choice" || t === "multi_select") return arraysEqualIgnoreOrder(answer, correct);
   return null;
 }

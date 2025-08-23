@@ -15,12 +15,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ examId: str
     if (!rpc.error && Array.isArray(rpc.data)) {
       rows = rpc.data as any[];
     }
+    if (rpc.error) {
+      // eslint-disable-next-line no-console
+      console.warn("admin_list_attempts RPC failed (export), using fallback query:", rpc.error.message || rpc.error);
+    }
 
     if (!rows) {
-      // Fallback: join exam_attempts with students via student_id
+      // Fallback: join exam_attempts with students and exam_results to include score
       const fb = await svc
         .from("exam_attempts")
-        .select("id, exam_id, ip_address, started_at, submitted_at, completion_status, students(student_name, code)")
+        .select("id, exam_id, ip_address, started_at, submitted_at, completion_status, students(student_name, code), exam_results(score_percentage)")
         .eq("exam_id", examId)
         .order("started_at", { ascending: false, nullsFirst: true });
       if (fb.error) return NextResponse.json({ error: fb.error.message }, { status: 400 });
@@ -32,7 +36,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ examId: str
         completion_status: a.completion_status,
         ip_address: a.ip_address,
         student_name: a?.students?.student_name ?? a?.student_name ?? null,
-        score_percentage: null,
+        score_percentage: a?.exam_results?.score_percentage ?? null,
       }));
     }
 
