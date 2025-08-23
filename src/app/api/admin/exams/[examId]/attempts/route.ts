@@ -15,10 +15,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ examId: str
       return NextResponse.json({ items: rpc.data });
     }
 
-    // Fallback: join exam_attempts with exam_codes for student_name
+    // Fallback: join exam_attempts with students via student_id
     const fb = await svc
       .from("exam_attempts")
-      .select("id, exam_id, code_id, ip_address, started_at, submitted_at, completion_status, exam_codes(student_name)")
+      .select("id, exam_id, ip_address, started_at, submitted_at, completion_status, students(student_name, code)")
       .eq("exam_id", examId)
       .order("started_at", { ascending: false, nullsFirst: true });
     if (!fb.error) {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ examId: str
         submitted_at: a.submitted_at,
         completion_status: a.completion_status,
         ip_address: a.ip_address,
-        student_name: a?.exam_codes?.student_name ?? null,
+        student_name: a?.students?.student_name ?? a?.student_name ?? null,
         score_percentage: null,
       }));
       return NextResponse.json({ items });

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     // Active attempts (started but not submitted, last 2h window)
     const activeQ = await svc
       .from("exam_attempts")
-      .select("id, exam_id, code_id, ip_address, started_at, exam_codes(student_name)")
+      .select("id, exam_id, ip_address, started_at, students(student_name, code)")
       .is("submitted_at", null)
       .gte("started_at", iso2h)
       .order("started_at", { ascending: false })
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     // Recent submissions (last 60 minutes)
     const recentQ = await svc
       .from("exam_attempts")
-      .select("id, exam_id, code_id, ip_address, started_at, submitted_at, completion_status, exam_codes(student_name)")
+      .select("id, exam_id, ip_address, started_at, submitted_at, completion_status, students(student_name, code)")
       .not("submitted_at", "is", null)
       .gte("submitted_at", iso60m)
       .order("submitted_at", { ascending: false })
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       id: a.id,
       exam_id: a.exam_id,
       exam_title: examMap[a.exam_id]?.title ?? "Unknown",
-      student_name: a.exam_codes?.student_name ?? null,
+      student_name: (a as any)?.students?.student_name ?? (a as any)?.student_name ?? null,
       ip_address: a.ip_address ?? null,
       started_at: a.started_at,
     }));
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       id: r.id,
       exam_id: r.exam_id,
       exam_title: examMap[r.exam_id]?.title ?? "Unknown",
-      student_name: r.exam_codes?.student_name ?? null,
+      student_name: (r as any)?.students?.student_name ?? (r as any)?.student_name ?? null,
       ip_address: r.ip_address ?? null,
       started_at: r.started_at,
       submitted_at: r.submitted_at,

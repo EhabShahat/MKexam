@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ attemptId: 
 
     const att = await svc
       .from("exam_attempts")
-      .select("id, exam_id, code_id, ip_address, started_at, submitted_at, completion_status, exam_codes(student_name)")
+      .select("id, exam_id, ip_address, started_at, submitted_at, completion_status, students(student_name, code)")
       .eq("id", attemptId)
       .maybeSingle();
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ attemptId: 
       submitted_at: a.submitted_at,
       completion_status: a.completion_status,
       ip_address: a.ip_address,
-      student_name: a?.exam_codes?.student_name ?? null,
+      student_name: a?.students?.student_name ?? a?.student_name ?? null,
       ips,
     };
 
