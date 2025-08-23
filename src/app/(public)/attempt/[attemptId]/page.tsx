@@ -344,31 +344,40 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
       {/* Header */}
       <header className="bg-[var(--card)] border-b border-[var(--border)] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <h1 className="text-xl font-semibold text-[var(--foreground)]">{state.exam.title}</h1>
-                <div className="flex items-center gap-4 text-sm text-[var(--muted-foreground)]">
-                  <span>{t(locale, 'question_of_total', { current: currentIdx + 1, total })}</span>
+          {/* Title full row */}
+          <h1 className="text-xl sm:text-2xl font-semibold text-[var(--foreground)]">{state.exam.title}</h1>
+
+          {/* Meta + Timer/Sync */}
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
+            {/* Left: progress meta */}
+            <div className="text-sm text-[var(--muted-foreground)] flex items-center gap-4">
+              <span>{t(locale, 'question_of_total', { current: currentIdx + 1, total })}</span>
+              <span>•</span>
+              <span>{t(locale, 'x_answered', { count: answered })}</span>
+              {!isOnline && (
+                <>
                   <span>•</span>
-                  <span>{t(locale, 'x_answered', { count: answered })}</span>
-                  {!isOnline && (
-                    <>
-                      <span>•</span>
-                      <span className="text-orange-600 flex items-center gap-1">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 12h18m-9-9v18"/>
-                        </svg>
-                        {t(locale, 'offline')}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
+                  <span className="text-orange-600 flex items-center gap-1">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 12h18m-9-9v18"/>
+                    </svg>
+                    {t(locale, 'offline')}
+                  </span>
+                </>
+              )}
             </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Save Status */}
+
+            {/* Right: timer with sync underneath */}
+            <div className="flex flex-col items-start sm:items-end gap-2">
+              <Timer 
+                startedAt={state.started_at} 
+                durationMinutes={state.exam.duration_minutes} 
+                examEndsAt={state.exam.end_time} 
+                onExpire={onSubmit} 
+                disabled={disabled}
+              />
+
+              {/* Sync status under timer */}
               <div className="flex items-center gap-2 text-sm">
                 {saveStatus === "saving" && (
                   <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
@@ -401,15 +410,6 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                   </div>
                 )}
               </div>
-
-              {/* Timer */}
-              <Timer 
-                startedAt={state.started_at} 
-                durationMinutes={state.exam.duration_minutes} 
-                examEndsAt={state.exam.end_time} 
-                onExpire={onSubmit} 
-                disabled={disabled}
-              />
             </div>
           </div>
 

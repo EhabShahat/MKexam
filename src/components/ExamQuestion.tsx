@@ -64,19 +64,28 @@ export default function ExamQuestion({
       onCut={(e) => e.preventDefault()}
     >
       <div className="space-y-2">
-        <div className="flex items-start justify-between gap-4">
-          <h3 
-            id={legendId} 
-            className={`text-lg font-medium text-[var(--foreground)] leading-relaxed flex-1 select-none ${
-              questionHasArabic ? 'arabic-text' : ''
-            }`}
-            dir={questionHasArabic ? 'rtl' : 'ltr'}
-          >
-            {q.required && <span className="text-red-500 mr-1">*</span>}
-            {q.question_text}
-          </h3>
-          
-          <div className="flex items-center gap-2">
+        {/* Title - full row */}
+        <h3 
+          id={legendId} 
+          className={`text-lg font-medium text-[var(--foreground)] leading-relaxed select-none ${
+            questionHasArabic ? 'arabic-text' : ''
+          }`}
+          dir={questionHasArabic ? 'rtl' : 'ltr'}
+        >
+          {q.required && <span className="text-red-500 mr-1">*</span>}
+          {q.question_text}
+        </h3>
+
+        {/* Second row: left points, right answered/clear */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-2">
+          <div>
+            {q.points && (
+              <p className="text-sm text-[var(--muted-foreground)] select-none">
+                {translate(locale, 'points')} {q.points}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-start sm:justify-end gap-2">
             {/* Answer status indicator */}
             {isAnswered() && (
               <div className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs font-medium">
@@ -86,7 +95,6 @@ export default function ExamQuestion({
                 {translate(locale, 'answered')}
               </div>
             )}
-            
             {/* Clear button */}
             {isAnswered() && !disabled && (
               <button
@@ -103,12 +111,6 @@ export default function ExamQuestion({
             )}
           </div>
         </div>
-        
-        {q.points && (
-          <p className="text-sm text-[var(--muted-foreground)] select-none">
-            {translate(locale, 'points')} {q.points}
-          </p>
-        )}
       </div>
       <div className="mt-4">
         {renderInput(qType)}
