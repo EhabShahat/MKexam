@@ -119,14 +119,12 @@ CREATE OR REPLACE FUNCTION public.start_attempt(p_exam_id uuid, p_code text, p_s
 AS $function$
 DECLARE
   v_exam public.exams%rowtype;
-  v_code public.exam_codes%rowtype;
+  v_student public.students%rowtype;
   v_attempt_id uuid;
   v_seed text;
   v_attempt_limit int;
   v_clean_name text;
   v_clean_norm text;
-  v_lock_k1 int;
-  v_lock_k2 int;
 BEGIN
   select * into v_exam from public.exams e where e.id = p_exam_id;
   if not found then
@@ -150,11 +148,17 @@ BEGIN
     if p_code is null then
       raise exception 'code_required';
     end if;
-    select * into v_code from public.exam_codes c where c.exam_id = p_exam_id and c.code = p_code;
+    select * into v_student from public.students s where s.code = p_code;
     if not found then
       raise exception 'invalid_code';
     end if;
-    if v_code.used_at is not null then
+    -- Lock on (exam_id, student_id) to avoid race conditions starting multiple attempts
+    PERFORM pg_advisory_xact_lock(hashtext(p_exam_id::text), hashtext(v_student.id::text));
+    -- Ensure no prior attempt exists for this student in this exam
+    if exists (
+      select 1 from public.student_exam_attempts sea
+      where sea.exam_id = p_exam_id and sea.student_id = v_student.id
+    ) then
       raise exception 'code_already_used';
     end if;
   end if;
@@ -204,11 +208,11 @@ BEGIN
   v_seed := encode(gen_random_bytes(16), 'hex');
   v_attempt_id := gen_random_uuid();
 
-  insert into public.exam_attempts(id, exam_id, code_id, ip_address, student_name, answers, auto_save_data, completion_status, version)
+  insert into public.exam_attempts(id, exam_id, student_id, ip_address, student_name, answers, auto_save_data, completion_status, version)
   values(
     v_attempt_id,
     p_exam_id,
-    case when v_exam.access_type='code_based' then v_code.id else null end,
+    case when v_exam.access_type='code_based' then v_student.id else null end,
     p_ip,
     case when v_exam.access_type in ('ip_restricted','open') then v_clean_name else null end,
     '{}'::jsonb,
@@ -218,8 +222,8 @@ BEGIN
   );
 
   if v_exam.access_type='code_based' then
-    update public.exam_codes set used_at = now(), ip_address = p_ip, student_name = coalesce(p_student_name, student_name)
-    where id = v_code.id and used_at is null;
+    insert into public.student_exam_attempts(student_id, exam_id, attempt_id, status)
+    values (v_student.id, p_exam_id, v_attempt_id, 'in_progress');
   end if;
 
   return query select v_attempt_id, v_seed;
@@ -343,10 +347,10 @@ BEGIN
          a.submitted_at,
          a.completion_status,
          a.ip_address,
-         coalesce(c.student_name, a.student_name) as student_name,
+         coalesce(s.student_name, a.student_name) as student_name,
          er.score_percentage
   FROM public.exam_attempts a
-  LEFT JOIN public.exam_codes c ON c.id = a.code_id
+  LEFT JOIN public.students s ON s.id = a.student_id
   LEFT JOIN public.exam_results er ON er.attempt_id = a.id
   WHERE a.exam_id = p_exam_id
   ORDER BY a.started_at desc nulls first;

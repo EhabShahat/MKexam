@@ -23,9 +23,9 @@ export async function POST(
     return NextResponse.json({ error: "Exam not found" }, { status: 404 });
   }
 
-  // Delete all entries from exam_students for this exam
+  // Delete all per-exam tracking rows for this exam in student_exam_attempts
   const { error: clearError } = await supabase
-    .from("exam_students")
+    .from("student_exam_attempts")
     .delete()
     .eq("exam_id", examId);
 

@@ -1,7 +1,6 @@
 -- Recommended indexes and constraints
  
- -- Ensure exam_codes are unique per exam
- create unique index if not exists idx_exam_codes_exam_id_code on public.exam_codes (exam_id, code);
+ -- legacy exam_codes index removed after migration to global students
  
  -- Questions ordering and querying
  create index if not exists idx_questions_exam_order on public.questions (exam_id, order_index);
@@ -13,7 +12,14 @@
  
  -- Results join support (join via attempt_id -> exam_attempts.exam_id)
  create index if not exists idx_results_attempt_id on public.exam_results (attempt_id);
- 
+
+ -- Global tables performance
+ -- Ensure fast lookups and enforce single attempt per student per exam
+ create index if not exists idx_attempts_student_id on public.exam_attempts (student_id);
+ create unique index if not exists uniq_sea_exam_student on public.student_exam_attempts (exam_id, student_id);
+ create index if not exists idx_sea_exam on public.student_exam_attempts (exam_id, started_at desc);
+ create index if not exists idx_sea_student on public.student_exam_attempts (student_id);
+
  -- IP rules lookups (create only if table exists)
  do $$ begin
    if to_regclass('public.exam_ips') is not null then

@@ -48,17 +48,17 @@ export async function GET(request: NextRequest) {
 
     let query;
     if (mode === "name") {
-      // Name mode (legacy path via exam_codes student_name)
+      // Name mode via global students joined through exam_attempts.student_id
       query = svc
         .from("exam_attempts")
         .select(
           `id, exam_id, completion_status, submitted_at,
            exams(title, settings),
-           exam_codes(student_name, code),
+           students(student_name, code),
            exam_results!inner(score_percentage)`
         )
         .order("submitted_at", { ascending: false })
-        .ilike("exam_codes.student_name", `%${searchTerm}%`);
+        .ilike("students.student_name", `%${searchTerm}%`);
     } else {
       // Code mode using global students through student_exam_attempts
       const code = searchTerm.trim();
@@ -107,8 +107,10 @@ export async function GET(request: NextRequest) {
         student_name = stuObj?.student_name || student_name;
         student_code = stuObj?.code || student_code;
       } else {
-        student_name = row.exam_codes?.student_name || student_name;
-        student_code = row.exam_codes?.code || student_code;
+        const stu = row.students;
+        const stuObj = Array.isArray(stu) ? stu[0] : stu;
+        student_name = stuObj?.student_name || student_name;
+        student_code = stuObj?.code || student_code;
       }
       // compute pass/fail based on exam.settings.pass_percentage
       const rawScore = row.exam_results?.score_percentage;

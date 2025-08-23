@@ -23,16 +23,38 @@ export async function GET(
     return NextResponse.json({ error: "Exam not found" }, { status: 404 });
   }
 
-  // Get all students with their exam attempt status for this exam
-  const { data: students, error } = await supabase
-    .from("student_exam_summary")
-    .select("*")
-    .eq("exam_id", examId);
+  // Get all students who have an attempt record for this exam with their status
+  const { data: rows, error } = await supabase
+    .from("student_exam_attempts")
+    .select(`
+      exam_id,
+      student_id,
+      status,
+      attempt_id,
+      started_at,
+      completed_at,
+      students ( id, code, student_name, mobile_number, created_at )
+    `)
+    .eq("exam_id", examId)
+    .order("started_at", { ascending: false });
 
   if (error) {
     console.error("Error fetching students for exam:", error);
     return NextResponse.json({ error: "Failed to fetch students" }, { status: 500 });
   }
+
+  const students = (rows || []).map((r: any) => ({
+    exam_id: r.exam_id,
+    student_id: r.student_id,
+    code: r.students?.code || null,
+    student_name: r.students?.student_name || null,
+    mobile_number: r.students?.mobile_number || null,
+    student_created_at: r.students?.created_at || null,
+    status: r.status,
+    attempt_id: r.attempt_id,
+    started_at: r.started_at,
+    completed_at: r.completed_at,
+  }));
 
   return NextResponse.json({ students });
 }
@@ -82,7 +104,7 @@ export async function POST(
           )
         )
       },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ students: items })
     });
 
     if (!studentsRes.ok) {
@@ -94,59 +116,13 @@ export async function POST(
     }
 
     const studentsResult = await studentsRes.json();
-    
-    // Now, link these students to the exam in the exam_students table
-    // First, get the student codes that were successfully added
-    const { data: existingStudents } = await supabase
-      .from("students")
-      .select("id, code")
-      .in("code", items.map(item => item.code || "").filter(Boolean));
 
-    // For items without codes, we need to query by name and mobile
-    const studentsWithoutCodes = items.filter(item => !item.code);
-    let additionalStudents = [];
-    
-    if (studentsWithoutCodes.length > 0) {
-      // This is a simplification - in a real app, you'd need more robust matching
-      for (const item of studentsWithoutCodes) {
-        const { data } = await supabase
-          .from("students")
-          .select("id, code")
-          .eq("student_name", item.student_name)
-          .eq("mobile_number", item.mobile_number || "")
-          .limit(1);
-          
-        if (data && data.length > 0) {
-          additionalStudents.push(data[0]);
-        }
-      }
-    }
-
-    const allStudents = [...(existingStudents || []), ...additionalStudents];
-    
-    // Insert into exam_students table, ignoring duplicates
-    const { error: linkError } = await supabase
-      .from("exam_students")
-      .upsert(
-        allStudents.map(student => ({
-          exam_id: examId,
-          student_id: student.id
-        })),
-        { onConflict: "exam_id,student_id" }
-      );
-
-    if (linkError) {
-      console.error("Error linking students to exam:", linkError);
-      return NextResponse.json(
-        { error: "Failed to link students to exam" },
-        { status: 500 }
-      );
-    }
-
+    // New behavior: only ensure students exist in global table.
+    // No linking table and no exam_codes upsert.
     return NextResponse.json({
       success: studentsResult.success,
       errors: studentsResult.errors,
-      message: `Successfully linked ${allStudents.length} students to exam`
+      message: `Successfully ensured ${Array.isArray(items) ? items.length : 0} students exist in public.students`
     });
   } catch (error) {
     console.error("Error processing request:", error);

@@ -32,21 +32,11 @@ create table if not exists public.questions (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.exam_codes (
-  id uuid primary key default gen_random_uuid(),
-  exam_id uuid not null references public.exams(id) on delete cascade,
-  code text not null,
-  student_name text null,
-  mobile_number text null,
-  generated_at timestamptz not null default now(),
-  used_at timestamptz null,
-  ip_address inet null
-);
+-- legacy exam_codes table removed after migration to global students
 
 create table if not exists public.exam_attempts (
   id uuid primary key default gen_random_uuid(),
   exam_id uuid not null references public.exams(id) on delete cascade,
-  code_id uuid null references public.exam_codes(id) on delete set null,
   ip_address inet null,
   student_name text null,
   answers jsonb not null default '{}'::jsonb,
@@ -99,6 +89,60 @@ create table if not exists public.admin_users (
   created_at timestamptz not null default now()
 );
 
+-- Global students table
+create table if not exists public.students (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  student_name text null,
+  mobile_number text null,
+  created_at timestamptz not null default now()
+);
+
+-- Per-exam attempt tracking for students
+create table if not exists public.student_exam_attempts (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references public.students(id) on delete cascade,
+  exam_id uuid not null references public.exams(id) on delete cascade,
+  attempt_id uuid null references public.exam_attempts(id) on delete set null,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz null,
+  status text not null default 'in_progress'
+);
+
+-- Ensure exam_attempts has student_id (legacy code_id retained for compat but unused)
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'exam_attempts' and column_name = 'student_id'
+  ) then
+    alter table public.exam_attempts add column student_id uuid null;
+  end if;
+  if not exists (
+    select 1 from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    where t.relname = 'exam_attempts' and c.conname = 'exam_attempts_student_id_fkey'
+  ) then
+    alter table public.exam_attempts
+      add constraint exam_attempts_student_id_fkey foreign key (student_id)
+      references public.students(id) on delete set null;
+  end if;
+end $$;
+
+-- Global summary view
+create or replace view public.student_exam_summary as
+  select
+    s.id as student_id,
+    s.code,
+    s.student_name,
+    s.mobile_number,
+    count(sea.id) as total_exams_attempted,
+    count(case when sea.status = 'completed' then 1 end) as completed_exams,
+    count(case when sea.status = 'in_progress' then 1 end) as in_progress_exams,
+    s.created_at as student_created_at
+  from public.students s
+  left join public.student_exam_attempts sea on sea.student_id = s.id
+  group by s.id, s.code, s.student_name, s.mobile_number, s.created_at;
+
 create table if not exists public.app_config (
   key text primary key,
   value text not null,
@@ -121,7 +165,7 @@ begin
 end $$;
 
 -- Indexes (some duplicated in indexes.sql; IF NOT EXISTS prevents errors)
-create unique index if not exists idx_exam_codes_exam_id_code on public.exam_codes (exam_id, code);
+-- legacy index for exam_codes removed
 create index if not exists idx_questions_exam_order on public.questions (exam_id, order_index);
 create index if not exists idx_attempts_exam_started on public.exam_attempts (exam_id, started_at desc);
 create index if not exists idx_attempts_exam_student_lower on public.exam_attempts (exam_id, lower(student_name));
