@@ -62,6 +62,8 @@ npm ci --legacy-peer-deps
 - **CI/CD** via GitHub Actions (`.github/workflows/ci.yml`)
 
 ## Database Schema
-Core tables: `exams`, `questions`, `exam_codes`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`, `app_settings`
+Core tables: `exams`, `questions`, `students`, `student_exam_attempts`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`, `app_settings`
+
+View: `student_exam_summary`. `exam_attempts.student_id` references `students(id)`.
 
 Key RPCs: `start_attempt`, `get_attempt_state`, `save_attempt`, `submit_attempt`

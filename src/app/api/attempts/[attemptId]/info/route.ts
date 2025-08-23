@@ -14,6 +14,7 @@ export async function GET(
       .from("exam_attempts")
       .select(`
         submitted_at,
+        student_name,
         exams!inner(
           title,
           description,
@@ -21,7 +22,7 @@ export async function GET(
           start_time,
           end_time
         ),
-        exam_codes(student_name)
+        students(student_name)
       `)
       .eq("id", attemptId)
       .single();
@@ -34,9 +35,9 @@ export async function GET(
     }
 
     const examData = (data as any).exams;
-    
+
     return NextResponse.json({
-      student_name: (data as any).exam_codes?.student_name || null,
+      student_name: (data as any).students?.student_name || (data as any).student_name || null,
       exam_title: examData?.title,
       submitted_at: data.submitted_at,
       exam: {

@@ -42,7 +42,7 @@ npm run dev
   - `/admin` — dashboard shell
   - `/admin/exams` — exams list/create/edit/duplicate/publish/archive
   - `/admin/exams/[examId]/questions` — manage questions + reorder + CSV/XLSX import
-  - `/admin/exams/[examId]/codes` — generate/import codes and WhatsApp send
+  - `/admin/exams/[examId]/codes` — generate/import codes (backed by global `students.code`) and WhatsApp send
   - `/admin/exams/[examId]/students` — manage students (add/edit/delete/import)
   - `/admin/results` — results overview and exports (CSV/XLSX/PDF)
   - `/admin/monitoring` — live activity (active attempts, recent submissions)
@@ -74,7 +74,9 @@ npm run type-check # type check (CI)
 
 ## Database Notes (Supabase)
 
-- Core tables: `exams`, `questions`, `exam_codes`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`.
+- Core tables: `exams`, `questions`, `students`, `student_exam_attempts`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`, `app_settings`.
+- View: `student_exam_summary` (global per-student stats).
+- `exam_attempts.student_id` references `students(id)`.
 - RPCs: `start_attempt`, `get_attempt_state`, `save_attempt`, `submit_attempt`.
 - Global settings: create a single-row `app_settings` table with text fields `brand_name`, `brand_logo_url`, `default_language`, `whatsapp_default_template` (UI/API will report `not_configured` until present).
 - Logo storage: run `npm run setup:storage` to create Supabase storage bucket for logo uploads.
@@ -83,7 +85,7 @@ npm run type-check # type check (CI)
 ## CSV/XLSX Import Columns
 
 - Questions: type-specific columns with validation (see UI preview page).
-- Students/Codes: `student_name`, `mobile_number`, optional `code`.
+- Students: `student_name`, `mobile_number`, `code` (unique). The Admin UI can generate codes if omitted during import.
 
 ## Next Steps
 
@@ -91,7 +93,8 @@ Start with `ROADMAP.md` — it tracks phases, current status, and prioritized ne
 
 - Create `app_settings` table, configure brand/template, then revisit `/admin/settings`.
 - Accessibility pass on UI (Phase 2).
-- Documentation (Admin/Student guides) (Phase 12). See `docs/AdminGuide.md` and `docs/StudentGuide.md`.
 - Configure Netlify environment and enable CI (Phase 10).
+
+Documentation lives primarily in `README.md`, `ROADMAP.md`, and steering notes under `.kiro/steering/`.
 
 Optional security hardening in Supabase Auth: enable leaked password protection and MFA.

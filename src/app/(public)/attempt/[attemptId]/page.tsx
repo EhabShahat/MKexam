@@ -392,14 +392,14 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </div>
       </header>
 
-      <div className="flex flex-col sm:flex-row">
+      <div className="flex flex-row min-h-[calc(100vh-200px)]">
         {/* Sidebar - Question Navigation */}
-        <aside className={`bg-[var(--card)] border-b sm:border-b-0 sm:border-r border-[var(--border)] transition-all duration-300 ${
+        <aside className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 ${
           sidebarCollapsed 
-            ? 'w-full h-16 sm:h-auto sm:w-16' 
-            : 'w-full sm:w-[5%] sm:min-w-[80px] md:min-w-[200px] md:w-[20%] lg:w-[15%]'
+            ? 'w-[10%] min-w-[40px] h-auto' 
+            : 'w-[10%] min-w-[40px]'
         }`}>
-          <div className="p-4">
+          <div className="p-2">
             <div className="flex items-center justify-between mb-4">
               {!sidebarCollapsed && (
                 <h2 className="font-semibold text-[var(--foreground)] block">{t(locale, 'questions')}</h2>
@@ -417,7 +417,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
             {/* Mobile and Collapsed View */}
             {sidebarCollapsed ? (
-              <div className="flex flex-row sm:flex-col gap-2 overflow-x-auto sm:overflow-y-auto sm:max-h-[calc(100vh-200px)] pb-2 sm:pb-0">
+              <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-200px)] pb-0">
                 {questions.map((q, idx) => {
                   const isAnswered = isQuestionAnswered(q, answers[q.id]);
                   const isCurrent = idx === currentIdx;
@@ -426,7 +426,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     <button
                       key={q.id}
                       onClick={() => setCurrentIdx(idx)}
-                      className={`flex-shrink-0 w-10 h-10 rounded-lg border text-sm font-medium transition-all duration-200 flex items-center justify-center select-none ${
+                      className={`flex-shrink-0 w-6 h-6 rounded-full border text-xs font-medium transition-all duration-200 flex items-center justify-center select-none ${
                         isCurrent 
                           ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm scale-110' 
                           : isAnswered
@@ -435,13 +435,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                       }`}
                       title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
                     >
-                      {isAnswered && !isCurrent ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto">
-                          <path d="M20 6L9 17l-5-5"/>
-                        </svg>
-                      ) : (
-                        idx + 1
-                      )}
+                      {idx + 1}
                     </button>
                   );
                 })}
@@ -459,41 +453,16 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     <button
                       key={q.id}
                       onClick={() => setCurrentIdx(idx)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
+                      className={`w-full flex justify-center p-1 rounded-full border transition-all duration-200 ${
                         isCurrent 
-                          ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)] shadow-sm' 
+                          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm' 
                           : isAnswered
-                          ? 'border-green-200 bg-green-50 text-green-900 hover:brightness-95'
-                          : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50 hover:translate-x-1'
+                          ? 'border-green-200 bg-green-600 text-white hover:brightness-95'
+                          : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
                       }`}
                       title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
-                          isCurrent
-                            ? 'bg-[var(--primary)] text-[var(--primary-foreground)] scale-110'
-                            : isAnswered
-                            ? 'bg-green-600 text-white'
-                            : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
-                        }`}>
-                          {isAnswered && !isCurrent ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M20 6L9 17l-5-5"/>
-                            </svg>
-                          ) : (
-                            idx + 1
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate select-none">
-                            {t(locale, 'question_n', { n: idx + 1 })}
-                          </p>
-                          <p className="text-xs text-[var(--muted-foreground)] capitalize">
-                            {q.question_type.replace('_', ' ')}
-                            {q.required && <span className="text-red-500 ml-1">*</span>}
-                          </p>
-                        </div>
-                      </div>
+                      {idx + 1}
                     </button>
                   );
                 })}
@@ -505,7 +474,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </aside>
 
         {/* Main Content */}
-        <main className="w-full sm:w-[95%] p-4 sm:p-6 flex-1 overflow-y-auto no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
+        <main className="w-[90%] p-4 sm:p-6 flex-1 overflow-y-auto no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
           <div className="max-w-4xl mx-auto">
             {displayMode === "per_question" ? (
               <div className="space-y-6">

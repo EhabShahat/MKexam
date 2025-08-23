@@ -1,6 +1,6 @@
 # Advanced Exam Application — Delivery Roadmap
 
-Last updated: 2025-08-11T21:55:32+03:00
+Last updated: 2025-08-23T19:49:26+03:00
 
 Legend: [x] Done · [ ] Todo
 
@@ -22,11 +22,11 @@ Acceptance criteria:
 ---
 
 ## Phase 1 — Database & Security (Supabase)
-- [x] Schema tables created: `exams`, `questions`, `exam_codes`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`
+- [x] Schema tables created: `exams`, `questions`, `students`, `student_exam_attempts`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`, `app_settings`
 - [x] RPC functions: `start_attempt`, `get_attempt_state`, `save_attempt`, `submit_attempt`
 - [x] RLS policies: public RPC access for student flows; admin-only table access via `admin_users`
 - [x] Address advisors: set immutable `search_path` on functions flagged by Supabase Advisors
-- [x] Add helpful indexes (e.g., `questions(exam_id, order_index)`, `exam_codes(exam_id, code)`, `exam_attempts(exam_id, started_at)`) and finalize constraints
+- [x] Add helpful indexes (e.g., `questions(exam_id, order_index)`, `student_exam_attempts(exam_id, student_id)` unique, `exam_attempts(exam_id, started_at)`, `exam_attempts(student_id)`) and finalize constraints; view `student_exam_summary`
 - [x] Export migrations to repo (for reproducibility)
 
 Acceptance criteria:
@@ -75,7 +75,7 @@ Acceptance criteria:
 - [x] Duplicate exam action
 - [x] Publish/archive flow
 - [x] Settings editor: attempt limits, randomization, display mode, auto-save interval
-- [x] Code mode toggle and generation for `exam_codes`
+- [x] Code mode toggle and generation for student codes (global `students.code`)
 
 Acceptance criteria:
 - Full CRUD + publish flow; settings persisted in `exams.settings`
@@ -95,7 +95,7 @@ Acceptance criteria:
 ---
 
 ## Phase 6 — Admin: Student Management
-- [x] Add/edit students for exams 
+- [x] Add/edit global students (unique codes) 
 - [x] Bulk import students (CSV/XLSX) with validation
 
 Acceptance criteria:

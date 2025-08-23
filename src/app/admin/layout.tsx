@@ -187,7 +187,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             )}
           </header>
-          <main id="main-content" tabIndex={-1} className="outline-none">
+          <main id="main-content" tabIndex={-1} className="outline-none w-[95%] sm:w-[95%] md:w-[95%] lg:w-full mx-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">{children}</div>
           </main>
         </div>

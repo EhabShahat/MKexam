@@ -7,7 +7,6 @@
 ├── .kiro/                  # Kiro AI assistant configuration
 ├── .next/                  # Next.js build output
 ├── db/                     # Essential database schema and setup files
-├── docs/                   # Documentation (AdminGuide.md, StudentGuide.md)
 ├── public/                 # Static assets (SVG icons)
 ├── src/                    # Source code (debug components removed)
 ├── package.json            # Dependencies and scripts
@@ -76,6 +75,7 @@ SQL files for database setup:
 - `rpc_functions.sql` - Stored procedures
 - `indexes.sql` - Database indexes for performance
 - `app_settings.sql` - Global application settings
+- `storage_setup.sql` - Supabase storage bucket setup
 
 ## Naming Conventions
 
