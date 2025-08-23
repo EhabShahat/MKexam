@@ -250,6 +250,19 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
     return () => window.removeEventListener("keydown", onKey);
   }, [displayMode, questions.length]);
 
+  // Auto-collapse sidebar on small/medium screens (use 5:95). Expand on large screens (wider sidebar)
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia("(min-width: 1024px)"); // lg breakpoint
+      // Collapse when below lg, expand at/above lg
+      setSidebarCollapsed(!mq.matches);
+      const handler = (e: MediaQueryListEvent) => setSidebarCollapsed(!e.matches);
+      // Modern browsers
+      mq.addEventListener?.("change", handler);
+      return () => mq.removeEventListener?.("change", handler);
+    } catch {}
+  }, []);
+
   if (!attemptId || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
@@ -394,11 +407,12 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
       <div className="flex flex-row min-h-[calc(100vh-200px)]">
         {/* Sidebar - Question Navigation */}
-        <aside className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 ${
-          sidebarCollapsed 
-            ? 'w-[10%] min-w-[40px] h-auto' 
-            : 'w-[10%] min-w-[40px]'
-        }`}>
+        <aside
+          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0
+          ${sidebarCollapsed
+            ? 'basis-[48px] sm:basis-[48px] lg:basis-[64px] min-w-[48px]'
+            : 'basis-[5%] sm:basis-[5%] md:basis-[5%] lg:basis-[15%] xl:basis-[18%] 2xl:basis-[20%] min-w-[40px] lg:min-w-[240px]'}
+        `}>
           <div className="p-2">
             <div className="flex items-center justify-between mb-4">
               {!sidebarCollapsed && (
@@ -474,7 +488,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
         </aside>
 
         {/* Main Content */}
-        <main className="w-[90%] p-4 sm:p-6 flex-1 overflow-y-auto no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
           <div className="max-w-4xl mx-auto">
             {displayMode === "per_question" ? (
               <div className="space-y-6">
