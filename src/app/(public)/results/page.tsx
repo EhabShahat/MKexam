@@ -27,7 +27,15 @@ interface PublicSettings {
   enable_code_search?: boolean;
 }
 
-export default function PublicResultsPage() {
+export default function PublicResultsPage({
+  initialSystemMode,
+  initialDisabledMessage,
+  skipModeFetch = !!initialSystemMode,
+}: {
+  initialSystemMode?: 'exam' | 'results' | 'disabled';
+  initialDisabledMessage?: string | null;
+  skipModeFetch?: boolean;
+} = {}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [effectiveMode, setEffectiveMode] = useState<"name" | "code">("name");
   const [settings, setSettings] = useState<PublicSettings>({});
@@ -36,8 +44,8 @@ export default function PublicResultsPage() {
   
   
   const router = useRouter();
-  const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(null);
-  const [disabledMessage, setDisabledMessage] = useState<string | null>(null);
+  const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(initialSystemMode ?? null);
+  const [disabledMessage, setDisabledMessage] = useState<string | null>(initialDisabledMessage ?? null);
   const { locale, dir } = useStudentLocale();
   
   // Fetch app settings
@@ -124,6 +132,7 @@ export default function PublicResultsPage() {
   
   // Fetch system mode & disabled message
   useEffect(() => {
+    if (skipModeFetch) return; // SSR provided system mode; avoid re-fetch
     let cancelled = false;
     (async () => {
       try {
@@ -132,7 +141,7 @@ export default function PublicResultsPage() {
         const data = await res.json();
         if (!cancelled) {
           setSystemMode((data?.mode as 'exam' | 'results' | 'disabled') ?? 'results');
-          setDisabledMessage(data?.disabled_message ?? null);
+          setDisabledMessage(data?.message ?? null);
         }
       } catch (e) {
         console.error('System mode fetch error:', e);
@@ -140,7 +149,7 @@ export default function PublicResultsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [skipModeFetch]);
 
   // Redirect if in exam mode
   useEffect(() => {

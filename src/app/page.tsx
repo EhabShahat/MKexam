@@ -56,7 +56,7 @@ export default async function Home() {
     console.log("🧾 Rendering results on root due to system mode");
     return (
       <PublicLocaleProvider>
-        <PublicResultsPage />
+        <PublicResultsPage initialSystemMode="results" skipModeFetch />
       </PublicLocaleProvider>
     );
   }
@@ -117,7 +117,7 @@ export default async function Home() {
   console.log("🚀 Rendering exam entry on root for exam:", examData.id);
   return (
     <PublicLocaleProvider>
-      <ExamEntry examId={examData.id} />
+      <ExamEntry examId={examData.id} initialSystemMode="exam" skipModeFetch />
     </PublicLocaleProvider>
   );
 }

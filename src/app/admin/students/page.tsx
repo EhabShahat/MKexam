@@ -75,6 +75,32 @@ export default function GlobalStudentsPage() {
       return (j.students as Student[]) ?? [];
     },
   });
+
+  // Reset attempts for a student (removes links in student_exam_attempts)
+  const resetAttempts = useMutation({
+    mutationFn: async ({ id, examId }: { id: string; examId?: string }) => {
+      if (!id || id === 'undefined') {
+        throw new Error("Invalid student ID");
+      }
+      setActionError(null);
+      const res = await authFetch(`/api/admin/students/${id}/reset-attempts`, {
+        method: "POST",
+        body: examId ? JSON.stringify({ examId }) : undefined,
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Reset failed");
+      return j as { deleted_count: number };
+    },
+    onSuccess: (result) => {
+      setActionError(null);
+      qc.invalidateQueries({ queryKey: ["admin", "students", "global"] });
+      toast.success(`Reset ${result.deleted_count || 0} attempt link(s)`);
+    },
+    onError: (error: any) => {
+      setActionError(error?.message || "Failed to reset attempts");
+    },
+  });
+
   const students = data ?? [];
 
   // Fetch app settings to get WhatsApp template
@@ -458,9 +484,7 @@ export default function GlobalStudentsPage() {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exams Attempted</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">In Progress</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attempts</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
@@ -468,7 +492,7 @@ export default function GlobalStudentsPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center justify-center">
                     <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -502,13 +526,11 @@ export default function GlobalStudentsPage() {
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">{s.total_exams_attempted || 0}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-sm font-medium">{s.completed_exams || 0}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium">{s.in_progress_exams || 0}</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" title="Total attempted">{s.total_exams_attempted || 0}</span>
+                        <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-sm font-medium" title="Completed">{s.completed_exams || 0}</span>
+                        <span className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium" title="In progress">{s.in_progress_exams || 0}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
@@ -534,6 +556,23 @@ export default function GlobalStudentsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
                           {saveRow.isPending ? "Saving..." : "Save"}
+                        </button>
+                        <button 
+                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50" 
+                          onClick={() => {
+                            const total = s.total_exams_attempted || 0;
+                            if (total === 0) return;
+                            if (confirm(`Reset attempts for student ${s.code}? This removes per-exam attempt links so they can retake. Historical submissions remain.`)) {
+                              resetAttempts.mutate({ id: studentId });
+                            }
+                          }}
+                          disabled={resetAttempts.isPending || (s.total_exams_attempted || 0) === 0}
+                          title={(s.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
+                        >
+                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9H4m0 0V4m0 5a8.003 8.003 0 0015.356 2H20" />
+                          </svg>
+                          {resetAttempts.isPending ? "Resetting..." : "Reset Attempts"}
                         </button>
                         <button 
                           className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50" 

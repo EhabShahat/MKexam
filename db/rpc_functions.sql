@@ -361,6 +361,41 @@ grant execute on function public.submit_attempt(uuid) to anon, authenticated;
 grant execute on function public.admin_list_attempts(uuid) to service_role;
 
 -- Admin management RPCs
+-- Reset a student's attempts (admin only). This deletes rows from student_exam_attempts
+-- so the student can retake exams. Historical exam_attempts and exam_results remain.
+CREATE OR REPLACE FUNCTION public.admin_reset_student_attempts(p_student_id uuid, p_exam_id uuid DEFAULT NULL)
+ RETURNS TABLE(deleted_count integer)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO public, extensions
+AS $function$
+DECLARE
+  v_deleted integer := 0;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+
+  IF p_student_id IS NULL THEN
+    RAISE EXCEPTION 'invalid_student_id';
+  END IF;
+
+  IF p_exam_id IS NULL THEN
+    DELETE FROM public.student_exam_attempts
+    WHERE student_id = p_student_id;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  ELSE
+    DELETE FROM public.student_exam_attempts
+    WHERE student_id = p_student_id AND exam_id = p_exam_id;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  END IF;
+
+  RETURN QUERY SELECT v_deleted;
+END;
+$function$;
+
+grant execute on function public.admin_reset_student_attempts(uuid, uuid) to service_role;
+grant execute on function public.admin_reset_student_attempts(uuid, uuid) to anon, authenticated;
 
 -- List admins (requires caller to be admin)
 CREATE OR REPLACE FUNCTION public.admin_list_admins()

@@ -22,12 +22,22 @@ type AccessBody = {
   studentName: string | null;
 };
 
-export default function ExamEntry({ examId }: { examId: string }) {
+export default function ExamEntry({
+  examId,
+  initialSystemMode,
+  initialDisabledMessage,
+  skipModeFetch = !!initialSystemMode,
+}: {
+  examId: string;
+  initialSystemMode?: "exam" | "results" | "disabled";
+  initialDisabledMessage?: string | null;
+  skipModeFetch?: boolean;
+}) {
   const router = useRouter();
   const { locale, dir } = useStudentLocale();
   const [examInfo, setExamInfo] = useState<ExamInfo | null>(null);
-  const [systemMode, setSystemMode] = useState<"exam" | "results" | "disabled" | null>(null);
-  const [disabledMessage, setDisabledMessage] = useState<string | null>(null);
+  const [systemMode, setSystemMode] = useState<"exam" | "results" | "disabled" | null>(initialSystemMode ?? null);
+  const [disabledMessage, setDisabledMessage] = useState<string | null>(initialDisabledMessage ?? null);
   const [code, setCode] = useState("");
   const [studentName, setStudentName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,6 +47,7 @@ export default function ExamEntry({ examId }: { examId: string }) {
   // Check tri-state system mode; redirect/guard when not in 'exam' mode
   useEffect(() => {
     if (!examId) return;
+    if (skipModeFetch) return; // SSR provided mode; avoid client re-check to prevent mismatch/loops
     let cancelled = false;
     (async () => {
       try {
@@ -46,7 +57,7 @@ export default function ExamEntry({ examId }: { examId: string }) {
           const data = await res.json();
           setSystemMode(data.mode);
           setDisabledMessage(data.message || null);
-          if (data.mode === "results") {
+          if (!skipModeFetch && data.mode === "results") {
             router.replace("/");
           }
           if (data.mode !== "exam") {
@@ -62,7 +73,7 @@ export default function ExamEntry({ examId }: { examId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [examId, router]);
+  }, [examId, router, skipModeFetch]);
 
   // Fetch exam info
   useEffect(() => {
