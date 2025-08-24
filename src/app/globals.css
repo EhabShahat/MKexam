@@ -48,18 +48,27 @@ body {
   color: var(--foreground);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande';
   direction: ltr; /* Default to LTR, can be overridden */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Arabic text support */
 .rtl {
   direction: rtl;
   text-align: right;
+  unicode-bidi: plaintext;
 }
 
 .arabic-text {
-  font-family: 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande', 'Segoe UI', sans-serif;
+  /* Prefer Android-available Arabic fonts first, then iOS/macOS fallbacks */
+  font-family: 'Noto Naskh Arabic', 'Noto Kufi Arabic', 'Droid Arabic Naskh', 'Tajawal', 'Cairo',
+               'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande', 'Segoe UI', sans-serif;
   line-height: 1.8;
-  letter-spacing: 0.02em;
+  /* Important: do not apply additional letter-spacing to Arabic; it breaks glyph joining */
+  letter-spacing: normal;
+  font-variant-ligatures: normal;
+  text-rendering: optimizeLegibility;
+  unicode-bidi: plaintext;
 }
 
 /* Mixed content support */

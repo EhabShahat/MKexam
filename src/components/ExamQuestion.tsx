@@ -68,9 +68,11 @@ export default function ExamQuestion({
         <h3 
           id={legendId} 
           className={`text-lg font-medium text-[var(--foreground)] leading-relaxed select-none ${
-            questionHasArabic ? 'arabic-text' : ''
+            questionHasArabic ? 'arabic-text rtl' : ''
           }`}
           dir={questionHasArabic ? 'rtl' : 'ltr'}
+          lang={questionHasArabic ? 'ar' : undefined}
+          translate="no"
         >
           {q.required && <span className="text-red-500 mr-1">*</span>}
           {q.question_text}
@@ -184,8 +186,10 @@ export default function ExamQuestion({
                       {optionLetter}
                     </div>
                     <span 
-                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text' : ''}`}
+                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text rtl' : ''}`}
                       dir={hasArabic(opt) ? 'rtl' : 'ltr'}
+                      lang={hasArabic(opt) ? 'ar' : undefined}
+                      translate="no"
                     >
                       {opt}
                     </span>
@@ -229,8 +233,10 @@ export default function ExamQuestion({
                       {optionLetter}
                     </div>
                     <span 
-                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text' : ''}`}
+                      className={`flex-1 leading-relaxed select-none ${hasArabic(opt) ? 'arabic-text rtl' : ''}`}
                       dir={hasArabic(opt) ? 'rtl' : 'ltr'}
+                      lang={hasArabic(opt) ? 'ar' : undefined}
+                      translate="no"
                     >
                       {opt}
                     </span>
@@ -258,6 +264,11 @@ export default function ExamQuestion({
               aria-labelledby={legendId}
               aria-required={q.required || undefined}
               placeholder={translate(locale, 'type_answer_here')}
+              dir="auto"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              translate="no"
             />
             <div className="flex justify-between text-xs text-[var(--muted-foreground)]">
               <span>{translate(locale, 'be_detailed')}</span>
