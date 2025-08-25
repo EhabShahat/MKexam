@@ -39,6 +39,23 @@ function WelcomePageInner() {
 
   const { locale, dir } = useStudentLocale();
 
+  function formatDateInCairo(loc: string, iso: string) {
+    try {
+      const dt = new Date(iso);
+      return new Intl.DateTimeFormat(loc, {
+        timeZone: "Africa/Cairo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(dt);
+    } catch {
+      try { return new Date(iso).toLocaleString(loc); } catch { return iso; }
+    }
+  }
+
   const studentName = searchParams.get('name') || 'Student';
 
   const routeParams = useParams();
@@ -98,7 +115,7 @@ function WelcomePageInner() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-[var(--muted-foreground)]">{t(locale, "loading_instructions")}</p>
@@ -109,7 +126,7 @@ function WelcomePageInner() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="max-w-md mx-auto text-center p-8">
           <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-600">
@@ -141,7 +158,7 @@ function WelcomePageInner() {
   const processedInstructions = rawInstructions.replace(/@name/g, studentName);
 
   return (
-    <main className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+    <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         <div className="bg-[var(--card)] rounded-lg border border-[var(--border)] p-8 shadow-sm">
           {/* Brand Logo and Name */}
@@ -214,7 +231,7 @@ function WelcomePageInner() {
                       </svg>
                       {t(locale, "available_from")}
                     </span>
-                    <span className="font-medium text-gray-800">{new Date(attemptInfo.exam.start_time).toLocaleString(locale)}</span>
+                    <span className="font-medium text-gray-800">{formatDateInCairo(locale, attemptInfo.exam.start_time)}</span>
                   </div>
                 )}
                 {attemptInfo.exam.end_time && (
@@ -225,7 +242,7 @@ function WelcomePageInner() {
                       </svg>
                       {t(locale, "available_until")}
                     </span>
-                    <span className="font-medium text-gray-800">{new Date(attemptInfo.exam.end_time).toLocaleString(locale)}</span>
+                    <span className="font-medium text-gray-800">{formatDateInCairo(locale, attemptInfo.exam.end_time)}</span>
                   </div>
                 )}
               </div>
@@ -268,8 +285,20 @@ function WelcomePageInner() {
 
 export default function WelcomePage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-[var(--muted-foreground)]">Loading…</div></main>}>
+    <Suspense fallback={<LocalizedFallback />}>
       <WelcomePageInner />
     </Suspense>
+  );
+}
+
+function LocalizedFallback() {
+  const { locale, dir } = useStudentLocale();
+  return (
+    <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+        <p className="text-[var(--muted-foreground)]">{t(locale, "loading_instructions")}</p>
+      </div>
+    </main>
   );
 }

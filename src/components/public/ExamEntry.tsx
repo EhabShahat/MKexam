@@ -168,7 +168,7 @@ export default function ExamEntry({
 
   if (!examId || loadingExam) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center" dir={dir} lang={locale}>
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <div className="space-y-2">
@@ -182,7 +182,7 @@ export default function ExamEntry({
 
   if (systemMode === "results") {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center" dir={dir} lang={locale}>
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-gray-700 font-medium">{t(locale, "redirecting_results")}</p>
@@ -193,7 +193,7 @@ export default function ExamEntry({
 
   if (systemMode === "disabled") {
     return (
-      <main className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+      <main className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4" dir={dir} lang={locale}>
         <div className="max-w-md mx-auto text-center bg-white rounded-xl border border-gray-200 p-8 shadow-lg">
           <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-600">
@@ -212,7 +212,7 @@ export default function ExamEntry({
 
   if (error && !examInfo) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" dir={dir} lang={locale}>
         <div className="max-w-md mx-auto">
           <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-lg text-center">
             <div className="w-20 h-20 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
@@ -246,10 +246,26 @@ export default function ExamEntry({
 
   const isNotStarted = startTime && now < startTime;
   const isEnded = endTime && now > endTime;
-  const formatDate = (d: Date | null) => (d ? d.toLocaleString(locale === "ar" ? "ar" : undefined) : "");
+  function formatDateInCairo(d: Date | null) {
+    if (!d) return "";
+    try {
+      return new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+        timeZone: "Africa/Cairo",
+      }).format(d);
+    } catch {
+      return d.toLocaleString();
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" dir={dir} lang={locale}>
       <div className="w-full max-w-md">
         <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-lg backdrop-blur-sm">
           {/* Brand Logo and Name */}
@@ -274,7 +290,7 @@ export default function ExamEntry({
                 </svg>
               </div>
               <h3 className="font-semibold text-amber-800 mb-2">{t(locale, "exam_not_started")}</h3>
-              <p className="text-amber-700 text-sm">{t(locale, "exam_available_on", { date: formatDate(startTime) })}</p>
+              <p className="text-amber-700 text-sm">{t(locale, "exam_available_on", { date: formatDateInCairo(startTime) })}</p>
             </div>
           )}
 
@@ -286,7 +302,7 @@ export default function ExamEntry({
                 </svg>
               </div>
               <h3 className="font-semibold text-red-800 mb-2">{t(locale, "exam_ended")}</h3>
-              <p className="text-red-700 text-sm">{t(locale, "exam_ended_on", { date: formatDate(endTime) })}</p>
+              <p className="text-red-700 text-sm">{t(locale, "exam_ended_on", { date: formatDateInCairo(endTime) })}</p>
             </div>
           )}
 

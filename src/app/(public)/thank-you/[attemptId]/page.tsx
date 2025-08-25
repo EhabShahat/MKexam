@@ -26,7 +26,24 @@ export default function ThankYouPage() {
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [attemptInfo, setAttemptInfo] = useState<AttemptInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const { locale } = useStudentLocale();
+  const { locale, dir } = useStudentLocale();
+
+  function formatDateInCairo(loc: string, iso: string) {
+    try {
+      const dt = new Date(iso);
+      return new Intl.DateTimeFormat(loc, {
+        timeZone: "Africa/Cairo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(dt);
+    } catch {
+      try { return new Date(iso).toLocaleString(loc); } catch { return iso; }
+    }
+  }
 
   const routeParams = useParams();
   // Resolve attemptId from router params with fallback from pathname
@@ -75,7 +92,7 @@ export default function ThankYouPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-[var(--muted-foreground)]">{t(locale, "loading_generic")}</p>
@@ -86,7 +103,7 @@ export default function ThankYouPage() {
 
   const studentName = attemptInfo?.student_name || 'Student';
   const examTitle = attemptInfo?.exam_title || 'Exam';
-  const submittedAt = attemptInfo?.submitted_at ? new Date(attemptInfo.submitted_at).toLocaleString(locale) : null;
+  const submittedAt = attemptInfo?.submitted_at ? formatDateInCairo(locale, attemptInfo.submitted_at) : null;
 
   const thankTitle =
     (locale === "ar" ? appSettings?.thank_you_title_ar : undefined) ??
@@ -98,7 +115,7 @@ export default function ThankYouPage() {
     t(locale, "thank_you_default_message");
 
   return (
-    <main className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+    <main dir={dir} lang={locale} className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="bg-[var(--card)] rounded-lg border border-[var(--border)] p-8 shadow-sm text-center">
           {/* Brand Logo and Name */}

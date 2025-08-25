@@ -44,7 +44,7 @@ export default function AttemptPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { locale } = useStudentLocale();
+  const { locale, dir } = useStudentLocale();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -303,7 +303,7 @@ export default function AttemptPage() {
 
   if (!attemptId || loading) {
     return (
-      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
+      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-[var(--muted-foreground)]">{t(locale, 'loading_exam')}</p>
@@ -314,7 +314,7 @@ export default function AttemptPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
+      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="max-w-md mx-auto text-center p-8">
           <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -340,7 +340,7 @@ export default function AttemptPage() {
 
   if (!state) {
     return (
-      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
+      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <p className="text-[var(--muted-foreground)]">{t(locale, 'no_attempt_found')}</p>
         </div>
@@ -352,7 +352,7 @@ export default function AttemptPage() {
   const progressPercentage = total ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <div className="min-h-screen min-h-[100svh] bg-[var(--background)] grid grid-rows-[auto,1fr]">
+    <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] bg-[var(--background)] grid grid-rows-[auto,1fr]">
       {/* Add style tag for no-copy functionality */}
       <style dangerouslySetInnerHTML={{ __html: noCopyStyle }} />
       {/* Header */}
