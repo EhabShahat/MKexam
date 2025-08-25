@@ -3,6 +3,7 @@ import PublicLocaleProvider from "@/components/public/PublicLocaleProvider";
 import PublicResultsPage from "./(public)/results/page";
 import ExamEntry from "@/components/public/ExamEntry";
 import Link from "next/link";
+import { resolveStudentLocale, getDir, type StudentLocale, t } from "@/i18n/student";
 
 type MinimalExam = {
   id: string;
@@ -105,7 +106,19 @@ export default async function Home() {
   
   if (isNotStarted) {
     console.log("⏳ Exam not started yet");
-    return <ExamNotStartedPage exam={examData} startTime={startTime!} />;
+    // Determine student locale from public settings (SSR)
+    let locale: StudentLocale = "en";
+    try {
+      const { data } = await svc
+        .from("app_settings")
+        .select("default_language")
+        .limit(1)
+        .maybeSingle();
+      locale = resolveStudentLocale(data as any);
+    } catch {
+      // keep default 'en'
+    }
+    return <ExamNotStartedPage exam={examData} startTime={startTime!} locale={locale} />;
   }
   
   if (isEnded) {
@@ -149,9 +162,26 @@ function NoExamsPage() {
   );
 }
 
-function ExamNotStartedPage({ exam, startTime }: { exam: MinimalExam; startTime: Date }) {
+function ExamNotStartedPage({ exam, startTime, locale }: { exam: MinimalExam; startTime: Date; locale: StudentLocale }) {
+  function formatDateInCairo(dt: Date, loc: StudentLocale) {
+    try {
+      return new Intl.DateTimeFormat(loc === "ar" ? "ar-EG" : "en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+        timeZone: "Africa/Cairo",
+      }).format(dt);
+     } catch {
+       return dt.toLocaleString();
+     }
+   }
+  const formatted = formatDateInCairo(startTime, locale);
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]" dir={getDir(locale)} lang={locale}>
       <div className="max-w-md mx-auto text-center p-8">
         <div className="w-16 h-16 mx-auto mb-6 bg-yellow-100 rounded-full flex items-center justify-center">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-600">
@@ -160,16 +190,16 @@ function ExamNotStartedPage({ exam, startTime }: { exam: MinimalExam; startTime:
           </svg>
         </div>
         <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          Exam Not Started
+          {t(locale, "exam_not_started")}
         </h1>
         <p className="text-[var(--muted-foreground)] mb-4">
           <strong>{exam.title}</strong>
         </p>
         <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          This exam will be available on {startTime.toLocaleString()}
+          {t(locale, "exam_available_on", { date: formatted })}
         </p>
         <div className="text-sm text-[var(--muted-foreground)]">
-          Please check back at the scheduled time.
+          {t(locale, "check_back_scheduled_time")}
         </div>
       </div>
     </div>
