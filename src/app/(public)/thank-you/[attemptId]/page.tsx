@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
@@ -20,21 +21,29 @@ interface AttemptInfo {
   submitted_at?: string;
 }
 
-export default function ThankYouPage({ params }: { params: Promise<{ attemptId: string }> }) {
+export default function ThankYouPage() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [attemptInfo, setAttemptInfo] = useState<AttemptInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const { locale } = useStudentLocale();
 
-  // Unwrap params Promise
+  const routeParams = useParams();
+  // Resolve attemptId from router params with fallback from pathname
   useEffect(() => {
-    async function unwrapParams() {
-      const resolvedParams = await params;
-      setAttemptId(resolvedParams.attemptId);
+    let id: string | null = null;
+    try {
+      const v: any = (routeParams as any)?.attemptId;
+      id = typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
+    } catch {}
+    if (!id) {
+      try {
+        const m = window.location.pathname.match(/\/thank-you\/([^\/?#]+)/);
+        if (m) id = decodeURIComponent(m[1]);
+      } catch {}
     }
-    unwrapParams();
-  }, [params]);
+    setAttemptId(id);
+  }, [routeParams]);
 
   // Fetch app settings and attempt info
   useEffect(() => {

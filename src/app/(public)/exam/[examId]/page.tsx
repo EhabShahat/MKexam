@@ -1,25 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import ExamEntry from "@/components/public/ExamEntry";
 
-export default function ExamEntryPage({ params }: { params: Promise<{ examId: string }> }) {
+export default function ExamEntryPage() {
   const [examId, setExamId] = useState<string | null>(null);
 
+  const routeParams = useParams();
+  // Resolve examId from router params with fallback from pathname
   useEffect(() => {
-    let mounted = true;
-    (async () => {
+    let id: string | null = null;
+    try {
+      const v: any = (routeParams as any)?.examId;
+      id = typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
+    } catch {}
+    if (!id) {
       try {
-        const p = await params;
-        if (mounted && p?.examId) setExamId(p.examId);
-      } catch {
-        // ignore
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [params]);
+        const m = window.location.pathname.match(/\/exam\/([^\/?#]+)/);
+        if (m) id = decodeURIComponent(m[1]);
+      } catch {}
+    }
+    setExamId(id);
+  }, [routeParams]);
 
   if (!examId) {
     return (

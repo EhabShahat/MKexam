@@ -8,6 +8,7 @@ import Timer from "@/components/Timer";
 import { shuffle } from "@/lib/randomization";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
+import { useParams } from "next/navigation";
 
 // Add CSS to prevent text selection
 const noCopyStyle = `
@@ -19,7 +20,7 @@ const noCopyStyle = `
   }
 `;
 
-export default function AttemptPage({ params }: { params: Promise<{ attemptId: string }> }) {
+export default function AttemptPage() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -49,14 +50,22 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
 
-  // Unwrap params Promise
+  const routeParams = useParams();
+  // Resolve attemptId from router params with legacy fallback for older browsers
   useEffect(() => {
-    async function unwrapParams() {
-      const resolvedParams = await params;
-      setAttemptId(resolvedParams.attemptId);
+    let id: string | null = null;
+    try {
+      const v: any = (routeParams as any)?.attemptId;
+      id = typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
+    } catch {}
+    if (!id) {
+      try {
+        const m = window.location.pathname.match(/\/attempt\/([^\/?#]+)/);
+        if (m) id = decodeURIComponent(m[1]);
+      } catch {}
     }
-    unwrapParams();
-  }, [params]);
+    setAttemptId(id);
+  }, [routeParams]);
 
   const total = state?.questions.length ?? 0;
   const answered = useMemo(() => countAnswered(answers, state?.questions || []), [answers, state?.questions]);

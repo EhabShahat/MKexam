@@ -123,7 +123,19 @@ export default async function Home() {
   
   if (isEnded) {
     console.log("⏰ Exam has ended");
-    return <ExamEndedPage exam={examData} endTime={endTime!} />;
+    // Determine student locale from public settings (SSR)
+    let locale: StudentLocale = "en";
+    try {
+      const { data } = await svc
+        .from("app_settings")
+        .select("default_language")
+        .limit(1)
+        .maybeSingle();
+      locale = resolveStudentLocale(data as any);
+    } catch {
+      // keep default 'en'
+    }
+    return <ExamEndedPage exam={examData} endTime={endTime!} locale={locale} />;
   }
   
   // Exam is active - render entry on root
@@ -206,9 +218,26 @@ function ExamNotStartedPage({ exam, startTime, locale }: { exam: MinimalExam; st
   );
 }
 
-function ExamEndedPage({ exam, endTime }: { exam: MinimalExam; endTime: Date }) {
+function ExamEndedPage({ exam, endTime, locale }: { exam: MinimalExam; endTime: Date; locale: StudentLocale }) {
+  function formatDateInCairo(dt: Date, loc: StudentLocale) {
+    try {
+      return new Intl.DateTimeFormat(loc === "ar" ? "ar-EG" : "en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: true,
+        timeZone: "Africa/Cairo",
+      }).format(dt);
+    } catch {
+      return dt.toLocaleString();
+    }
+  }
+  const formatted = formatDateInCairo(endTime, locale);
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]" dir={getDir(locale)} lang={locale}>
       <div className="max-w-md mx-auto text-center p-8">
         <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-600">
@@ -218,16 +247,16 @@ function ExamEndedPage({ exam, endTime }: { exam: MinimalExam; endTime: Date }) 
           </svg>
         </div>
         <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          Exam Ended
+          {t(locale, "exam_ended")}
         </h1>
         <p className="text-[var(--muted-foreground)] mb-4">
           <strong>{exam.title}</strong>
         </p>
         <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          This exam ended on {endTime.toLocaleString()}
+          {t(locale, "exam_ended_on", { date: formatted })}
         </p>
         <div className="text-sm text-[var(--muted-foreground)]">
-          Please contact your instructor if you have questions.
+          {t(locale, "help_contact_instructor")}
         </div>
       </div>
     </div>

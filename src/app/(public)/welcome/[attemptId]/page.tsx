@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BrandLogo from "@/components/BrandLogo";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
@@ -28,7 +28,7 @@ interface AttemptInfo {
   exam: ExamInfo;
 }
 
-function WelcomePageInner({ params }: { params: Promise<{ attemptId: string }> }) {
+function WelcomePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -41,14 +41,22 @@ function WelcomePageInner({ params }: { params: Promise<{ attemptId: string }> }
 
   const studentName = searchParams.get('name') || 'Student';
 
-  // Unwrap params Promise
+  const routeParams = useParams();
+  // Resolve attemptId with fallback from pathname
   useEffect(() => {
-    async function unwrapParams() {
-      const resolvedParams = await params;
-      setAttemptId(resolvedParams.attemptId);
+    let id: string | null = null;
+    try {
+      const v: any = (routeParams as any)?.attemptId;
+      id = typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
+    } catch {}
+    if (!id) {
+      try {
+        const m = window.location.pathname.match(/\/welcome\/([^\/?#]+)/);
+        if (m) id = decodeURIComponent(m[1]);
+      } catch {}
     }
-    unwrapParams();
-  }, [params]);
+    setAttemptId(id);
+  }, [routeParams]);
 
   // Fetch app settings and attempt info
   useEffect(() => {
@@ -258,10 +266,10 @@ function WelcomePageInner({ params }: { params: Promise<{ attemptId: string }> }
   );
 }
 
-export default function WelcomePage(props: { params: Promise<{ attemptId: string }> }) {
+export default function WelcomePage() {
   return (
     <Suspense fallback={<main className="min-h-screen bg-[var(--background)] flex items-center justify-center"><div className="text-[var(--muted-foreground)]">Loading…</div></main>}>
-      <WelcomePageInner {...props} />
+      <WelcomePageInner />
     </Suspense>
   );
 }

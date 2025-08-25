@@ -36,6 +36,7 @@ export default function AdminResultsIndex() {
   const [endDate, setEndDate] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [scoreSort, setScoreSort] = useState<"none" | "asc" | "desc">("none");
   
   const toast = useToast();
 
@@ -96,6 +97,31 @@ export default function AdminResultsIndex() {
       return true;
     });
   }, [attemptsQuery.data, studentFilter, statusFilter, startDate, endDate]);
+
+  const sortedAttempts = useMemo(() => {
+    const rows = filteredAttempts.slice();
+    if (scoreSort === "none") return rows;
+    if (scoreSort === "asc") {
+      rows.sort((a, b) => {
+        const av = a.score_percentage;
+        const bv = b.score_percentage;
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1; // nulls last
+        if (bv === null) return -1;
+        return (av as number) - (bv as number);
+      });
+    } else if (scoreSort === "desc") {
+      rows.sort((a, b) => {
+        const av = a.score_percentage;
+        const bv = b.score_percentage;
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1; // nulls last
+        if (bv === null) return -1;
+        return (bv as number) - (av as number);
+      });
+    }
+    return rows;
+  }, [filteredAttempts, scoreSort]);
 
   const handleExportCsv = async () => {
     setExportingCsv(true);
@@ -316,7 +342,7 @@ export default function AdminResultsIndex() {
       {/* Filters */}
       {examId && (
         <ModernCard>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Student Name
@@ -370,6 +396,21 @@ export default function AdminResultsIndex() {
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sort by Score
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={scoreSort}
+                onChange={(e) => setScoreSort(e.target.value as any)}
+              >
+                <option value="none">None</option>
+                <option value="desc">Highest first</option>
+                <option value="asc">Lowest first</option>
+              </select>
+            </div>
             
             <div className="flex items-end">
               <ActionButton
@@ -404,7 +445,7 @@ export default function AdminResultsIndex() {
       {examId && (
         <ModernTable
           columns={columns}
-          data={filteredAttempts}
+          data={sortedAttempts}
           renderCell={renderCell}
           loading={attemptsQuery.isLoading}
           emptyMessage={
