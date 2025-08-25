@@ -1,16 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Tajawal } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const appSans = Tajawal({
+  variable: "--font-app-sans",
+  subsets: ["latin", "arabic"],
+  weight: ["400", "500", "700"],
+  display: "swap",
+  preload: true,
 });
 
 export const metadata: Metadata = {
@@ -35,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" translate="no" className="notranslate">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${appSans.variable} antialiased font-sans`}
       >
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
