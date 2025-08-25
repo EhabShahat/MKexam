@@ -40,9 +40,27 @@
     "@types/papaparse": "^5.3.16",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "browserslist": {
+    "production": [
+      "last 2 iOS major versions",
+      "iOS >= 12",
+      "Safari >= 12",
+      "Android >= 7",
+      "ChromeAndroid >= 80",
+      "Chrome >= 80",
+      "Firefox >= 78",
+      "Edge >= 80"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

@@ -162,7 +162,7 @@ export default function PublicResultsPage({
   useEffect(() => {
     if (systemMode === 'results' && resultsQuery.data) {
       setShowResults(true);
-      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      setTimeout(() => { try { resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { try { (resultsRef.current as any)?.scrollIntoView?.(true); } catch {} } }, 50);
     }
   }, [systemMode, resultsQuery.data]);
 

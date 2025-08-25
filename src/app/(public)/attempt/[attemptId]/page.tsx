@@ -261,9 +261,14 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
       // Collapse when below lg, expand at/above lg
       setSidebarCollapsed(!mq.matches);
       const handler = (e: MediaQueryListEvent) => setSidebarCollapsed(!e.matches);
-      // Modern browsers
-      mq.addEventListener?.("change", handler);
-      return () => mq.removeEventListener?.("change", handler);
+      // Modern + legacy listeners
+      if ("addEventListener" in mq) {
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+      } else if ("addListener" in mq) {
+        (mq as any).addListener(handler);
+        return () => (mq as any).removeListener(handler);
+      }
     } catch {}
   }, []);
 
@@ -279,7 +284,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
     if (!q) return;
     const el = questionRefs.current[q.id];
     if (el) {
-      try { el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" }); } catch {}
+      try { el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" }); } catch { try { (el as any).scrollIntoView(true); } catch {} }
       setFlashId(q.id);
       try { (el as any)?.focus?.({ preventScroll: true }); } catch {}
       if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -289,7 +294,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
   if (!attemptId || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <p className="text-[var(--muted-foreground)]">{t(locale, 'loading_exam')}</p>
@@ -300,10 +305,10 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="max-w-md mx-auto text-center p-8">
           <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-600">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="15" y1="9" x2="9" y2="15"/>
               <line x1="9" y1="9" x2="15" y2="15"/>
@@ -326,7 +331,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
 
   if (!state) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+      <div className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <p className="text-[var(--muted-foreground)]">{t(locale, 'no_attempt_found')}</p>
         </div>
@@ -338,7 +343,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
   const progressPercentage = total ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] grid grid-rows-[auto,1fr]">
+    <div className="min-h-screen min-h-[100svh] bg-[var(--background)] grid grid-rows-[auto,1fr]">
       {/* Add style tag for no-copy functionality */}
       <style dangerouslySetInnerHTML={{ __html: noCopyStyle }} />
       {/* Header */}
@@ -547,11 +552,13 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                       disabled={disabled}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                        <polyline points="17,21 17,13 7,13 7,21"/>
-                        <polyline points="7,3 7,8 15,8"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                          <polyline points="17,21 17,13 7,13 7,21"/>
+                          <polyline points="7,3 7,8 15,8"/>
+                        </svg>
+                        {t(locale, 'save')}
                       </svg>
-                      {t(locale, 'save')}
                     </button>
 
                     {currentIdx === questions.length - 1 ? (
@@ -623,8 +630,8 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                      <polyline points="17,21 17,13 7,13 7,21" />
-                      <polyline points="7,3 7,8 15,8" />
+                      <polyline points="17,21 17,13 7,13 7,21"/>
+                      <polyline points="7,3 7,8 15,8"/>
                     </svg>
                     {t(locale, 'save_progress')}
                   </button>
@@ -642,7 +649,7 @@ export default function AttemptPage({ params }: { params: Promise<{ attemptId: s
                     ) : (
                       <>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5" />
+                          <path d="M20 6L9 17l-5-5"/>
                         </svg>
                         {t(locale, 'submit_exam')}
                       </>

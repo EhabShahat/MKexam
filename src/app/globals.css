@@ -260,6 +260,7 @@ body {
 
 /* Modal backdrop */
 .modal-backdrop {
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -417,6 +418,7 @@ body {
   .modal-content {
     margin: 1rem;
     max-height: calc(100vh - 2rem);
+    max-height: calc(100svh - 2rem);
   }
   
   .option-input-group {
@@ -477,6 +479,7 @@ body {
 
 /* Enhanced modal styling */
 .modal-backdrop {
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   animation: fadeIn 0.2s ease;
 }

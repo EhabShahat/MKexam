@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ examId: str
       if (v === null || v === undefined) return "";
       const s = String(v);
       if (s.includes("\"") || s.includes(",") || s.includes("\n")) {
-        return '"' + s.replaceAll('"', '""') + '"';
+        return '"' + s.replace(/"/g, '""') + '"';
       }
       return s;
     };
