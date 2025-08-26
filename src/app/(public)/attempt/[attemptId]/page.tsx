@@ -26,9 +26,10 @@ function isQuestionAnswered(question: Question, answer: AnswerValue): boolean {
   
   switch (question.question_type) {
     case "multiple_choice":
+    case "single_choice":
     case "true_false":
       return typeof answer === "string" && answer.trim() !== "";
-    case "multiple_select":
+    case "multi_select":
       return Array.isArray(answer) && answer.length > 0;
     case "short_answer":
     case "paragraph":

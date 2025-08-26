@@ -3,6 +3,7 @@ export type QuestionType =
   | "single_choice"
   | "multiple_choice"
   | "multi_select"
+  | "short_answer"
   | "paragraph";
 
 export interface Question {
