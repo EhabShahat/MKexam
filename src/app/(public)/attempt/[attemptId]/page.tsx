@@ -10,6 +10,29 @@ import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
 import { useParams } from "next/navigation";
 
+// Aggressive storage clearing for exam attempts - ensures completely fresh experience
+if (typeof window !== 'undefined') {
+  try {
+    // Clear everything for a completely fresh exam experience
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear all cookies
+    document.cookie.split(";").forEach(cookie => {
+      const eqPos = cookie.indexOf("=");
+      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
+      }
+    });
+    
+    console.log('🧹 EXAM: All storage cleared for fresh exam experience');
+  } catch (error) {
+    console.warn('Could not clear storage for exam:', error);
+  }
+}
+
 // Add CSS to prevent text selection
 const noCopyStyle = `
   .no-copy {

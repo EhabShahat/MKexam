@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Tajawal } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
+import StorageCleaner from "@/components/StorageCleaner";
 
 const appSans = Tajawal({
   variable: "--font-app-sans",
@@ -121,6 +122,7 @@ export default function RootLayout({
           WebkitTapHighlightColor: 'transparent'
         }}
       >
+        <StorageCleaner />
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
       </body>
