@@ -17,7 +17,18 @@ export async function POST(
 
     const supabase = supabaseServer();
 
-    // Check if IP or student name is blocked (Easter Egg feature)
+    // Get student data if code is provided (for mobile number blocking check)
+    let studentData = null;
+    if (code) {
+      const { data } = await supabase
+        .from("students")
+        .select("student_name, mobile_number")
+        .eq("code", code)
+        .single();
+      studentData = data;
+    }
+
+    // Check if IP, student name, or mobile number is blocked (Easter Egg feature)
     const blockedChecks = [];
     if (ip) {
       blockedChecks.push(
@@ -36,6 +47,16 @@ export async function POST(
           .select("value, reason")
           .eq("type", "name")
           .ilike("value", studentName.trim())
+          .single()
+      );
+    }
+    if (studentData?.mobile_number) {
+      blockedChecks.push(
+        supabase
+          .from("blocked_entries")
+          .select("value, reason")
+          .eq("type", "mobile")
+          .eq("value", studentData.mobile_number.trim())
           .single()
       );
     }
@@ -73,18 +94,20 @@ export async function POST(
       return NextResponse.json({ error: "no_attempt" }, { status: 400 });
     }
 
-    // Get student name for the response
+    // Get student name for the response (reuse studentData if already fetched)
     let finalStudentName = studentName;
-    if (code) {
-      // Use only the global students table
-      const { data: studentData } = await supabase
+    if (code && studentData?.student_name) {
+      finalStudentName = studentData.student_name;
+    } else if (code && !studentData) {
+      // Fallback if studentData wasn't fetched earlier
+      const { data: fallbackData } = await supabase
         .from("students")
         .select("student_name")
         .eq("code", code)
         .single();
       
-      if (studentData?.student_name) {
-        finalStudentName = studentData.student_name;
+      if (fallbackData?.student_name) {
+        finalStudentName = fallbackData.student_name;
       }
     }
 

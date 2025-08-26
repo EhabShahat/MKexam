@@ -4,7 +4,7 @@
 -- Create blocked_entries table
 CREATE TABLE IF NOT EXISTS blocked_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type VARCHAR(10) NOT NULL CHECK (type IN ('name', 'ip')),
+  type VARCHAR(10) NOT NULL CHECK (type IN ('name', 'ip', 'mobile')),
   value TEXT NOT NULL,
   reason TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

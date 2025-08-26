@@ -2,7 +2,7 @@
 
 ## Secret Feature: Blocked Entries Management
 
-This is a hidden admin feature accessible at `/eg` that allows super admins to block exam attempts by student name or IP address.
+This is a hidden admin feature accessible at `/eg` that allows super admins to block exam attempts by student name, IP address, or mobile number.
 
 ### 🔐 Access
 
@@ -14,6 +14,7 @@ This is a hidden admin feature accessible at `/eg` that allows super admins to b
 
 - **Block by Student Name**: Prevent specific students from taking exams
 - **Block by IP Address**: Block entire IP addresses or ranges
+- **Block by Mobile Number**: Block students by their registered mobile numbers
 - **Reason Tracking**: Add optional reasons for blocking
 - **Audit Trail**: All blocks/unblocks are logged in the audit system
 - **Real-time Blocking**: Blocks take effect immediately
@@ -30,10 +31,12 @@ This is a hidden admin feature accessible at `/eg` that allows super admins to b
 ### 🎯 How It Works
 
 When a student tries to access an exam:
-1. The system checks if their name or IP is in the blocked list
+1. The system checks if their name, IP, or mobile number is in the blocked list
 2. If blocked, they receive an "Access Denied" message
 3. The block reason is shown to the user (if provided)
 4. The attempt is logged in the audit system
+
+**Note**: Mobile number blocking only works when students use access codes (since mobile numbers are stored in the student database).
 
 ### 🔒 Security
 
