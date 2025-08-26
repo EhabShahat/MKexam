@@ -37,6 +37,8 @@ export default function AdminResultsIndex() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const [scoreSort, setScoreSort] = useState<"none" | "asc" | "desc">("none");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   
   const toast = useToast();
 
@@ -173,6 +175,33 @@ export default function AdminResultsIndex() {
     }
   };
 
+  const deleteAttempt = async (attemptId: string) => {
+    try {
+      setDeleting(attemptId);
+      const response = await authFetch(`/api/admin/attempts/${attemptId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete attempt');
+      }
+      
+      // Refresh the data
+      attemptsQuery.refetch();
+      setDeleteConfirm(null);
+      toast.success({ title: "Success", message: "Attempt deleted successfully" });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error({ 
+        title: "Delete Failed", 
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const clearFilters = () => {
     setStudentFilter("");
     setStatusFilter("");
@@ -230,9 +259,19 @@ export default function AdminResultsIndex() {
         );
       case "actions":
         return (
-          <Link href={`/admin/results/${attempt.id}`}>
-            <ActionButton variant="secondary" size="sm">View</ActionButton>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/admin/results/${attempt.id}`}>
+              <ActionButton variant="secondary" size="sm">View</ActionButton>
+            </Link>
+            <ActionButton 
+              variant="danger" 
+              size="sm"
+              onClick={() => setDeleteConfirm(attempt.id)}
+              title="Delete Attempt"
+            >
+              Delete
+            </ActionButton>
+          </div>
         );
       default:
         return null;
@@ -463,6 +502,47 @@ export default function AdminResultsIndex() {
             <p className="text-sm mt-1">{(attemptsQuery.error as any).message}</p>
           </div>
         </ModernCard>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Delete Attempt
+                </h3>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to delete this attempt? This action cannot be undone and will permanently remove all associated data including answers and scores.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <ActionButton
+                variant="secondary"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting === deleteConfirm}
+              >
+                Cancel
+              </ActionButton>
+              <ActionButton
+                variant="danger"
+                onClick={() => deleteAttempt(deleteConfirm)}
+                loading={deleting === deleteConfirm}
+              >
+                Delete Attempt
+              </ActionButton>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

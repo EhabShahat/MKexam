@@ -22,13 +22,14 @@ const noCopyStyle = `
 
 // Helper functions
 function isQuestionAnswered(question: Question, answer: AnswerValue): boolean {
-  if (!answer) return false;
+  if (answer === null || answer === undefined) return false;
   
   switch (question.question_type) {
     case "multiple_choice":
     case "single_choice":
-    case "true_false":
       return typeof answer === "string" && answer.trim() !== "";
+    case "true_false":
+      return typeof answer === "boolean"; // Fix: true/false answers are boolean, not string
     case "multi_select":
       return Array.isArray(answer) && answer.length > 0;
     case "short_answer":
@@ -62,12 +63,14 @@ export default function AttemptPage() {
   useEffect(() => { answersRef.current = answers; }, [answers]);
   useEffect(() => { versionRef.current = version; }, [version]);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [timeWarning, setTimeWarning] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(200); // Dynamic header height
+  const [timeWarning, setTimeWarning] = useState<string | null>(null);
   const { locale, dir } = useStudentLocale();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -395,6 +398,27 @@ export default function AttemptPage() {
     }
   }
 
+  function handleTimeWarning(minutesLeft: number) {
+    let message = "";
+    if (minutesLeft === 60) {
+      message = t(locale, 'one_hour_remaining');
+    } else if (minutesLeft === 30) {
+      message = t(locale, 'thirty_minutes_remaining');
+    } else if (minutesLeft === 15) {
+      message = t(locale, 'fifteen_minutes_remaining');
+    } else if (minutesLeft === 5) {
+      message = t(locale, 'five_minutes_remaining');
+    } else if (minutesLeft === 1) {
+      message = t(locale, 'one_minute_remaining');
+    }
+    
+    if (message) {
+      setTimeWarning(message);
+      // Auto-hide warning after 10 seconds
+      setTimeout(() => setTimeWarning(null), 10000);
+    }
+  }
+
   if (!attemptId || loading) {
     return (
       <div dir={dir} lang={locale} className="loading-container mobile-safe">
@@ -557,6 +581,7 @@ export default function AttemptPage() {
             durationMinutes={state.exam.duration_minutes} 
             examEndsAt={state.exam.end_time} 
             onExpire={onSubmit} 
+            onWarning={handleTimeWarning}
             disabled={disabled}
           />
 
@@ -993,6 +1018,71 @@ export default function AttemptPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Time Warning Modal */}
+      {timeWarning && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: '#fef3c7',
+          border: '2px solid #f59e0b',
+          borderRadius: '0.5rem',
+          padding: '1.5rem',
+          zIndex: 60,
+          maxWidth: '400px',
+          width: '90%',
+          textAlign: 'center',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            gap: '0.5rem',
+            marginBottom: '1rem',
+            color: '#d97706'
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <h3 style={{ 
+              fontSize: '1.125rem', 
+              fontWeight: '600',
+              margin: 0,
+              color: '#d97706'
+            }}>
+              {t(locale, 'time_warning')}
+            </h3>
+          </div>
+          <p style={{ 
+            color: '#92400e', 
+            marginBottom: '1rem',
+            fontSize: '1rem',
+            margin: '0 0 1rem 0'
+          }}>
+            {timeWarning}
+          </p>
+          <button 
+            onClick={() => setTimeWarning(null)}
+            style={{
+              backgroundColor: '#f59e0b',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.375rem',
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            {t(locale, 'understood')}
+          </button>
         </div>
       )}
 

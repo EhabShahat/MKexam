@@ -145,6 +145,15 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     points: "Points:",
     home: "Home",
     results: "Results",
+    
+    // Time warnings
+    time_warning: "Time Warning",
+    one_hour_remaining: "Only 1 hour remaining! Please manage your time carefully.",
+    thirty_minutes_remaining: "Only 30 minutes remaining! Please review your answers.",
+    fifteen_minutes_remaining: "Only 15 minutes remaining! Please finish up soon.",
+    five_minutes_remaining: "Only 5 minutes remaining! Please submit your exam soon.",
+    one_minute_remaining: "Only 1 minute remaining! The exam will auto-submit soon.",
+    understood: "Understood",
   },
   ar: {
     loading_exam: "جاري تحميل الاختبار...",
@@ -271,6 +280,15 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     points: "الدرجات:",
     home: "الصفحة الرئيسية",
     results: "النتائج",
+    
+    // Time warnings
+    time_warning: "تحذير الوقت",
+    one_hour_remaining: "باقي ساعة واحدة فقط! يرجى إدارة وقتك بعناية.",
+    thirty_minutes_remaining: "باقي 30 دقيقة فقط! يرجى مراجعة إجاباتك.",
+    fifteen_minutes_remaining: "باقي 15 دقيقة فقط! يرجى الانتهاء قريباً.",
+    five_minutes_remaining: "باقي 5 دقائق فقط! يرجى تسليم الامتحان قريباً.",
+    one_minute_remaining: "باقي دقيقة واحدة فقط! سيتم تسليم الامتحان تلقائياً قريباً.",
+    understood: "مفهوم",
   },
 };
 

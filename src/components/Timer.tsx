@@ -7,16 +7,19 @@ export default function Timer({
   durationMinutes,
   examEndsAt,
   onExpire,
+  onWarning,
   disabled,
 }: {
   startedAt: string;
   durationMinutes: number | null;
   examEndsAt: string | null;
   onExpire: () => void;
+  onWarning?: (minutesLeft: number) => void;
   disabled?: boolean;
 }) {
   const [now, setNow] = useState<number>(Date.now());
   const firedRef = useRef(false);
+  const warningsFiredRef = useRef<Set<number>>(new Set());
 
   const deadline = useMemo(() => {
     const deadlines: number[] = [];
@@ -69,19 +72,37 @@ export default function Timer({
         onExpire();
       }, 1000);
     }
+    
+    // Fire warnings at specific intervals
+    if (onWarning && remainingMs !== null && remainingMs > 0) {
+      const minutesLeft = Math.floor(remainingMs / 60000);
+      const warningThresholds = [60, 30, 15, 5, 1]; // 1 hour, 30 min, 15 min, 5 min, 1 min
+      
+      for (const threshold of warningThresholds) {
+        if (minutesLeft === threshold && !warningsFiredRef.current.has(threshold)) {
+          warningsFiredRef.current.add(threshold);
+          onWarning(threshold);
+          break;
+        }
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingMs, deadline, disabled, startedAt]);
+  }, [remainingMs, deadline, disabled, startedAt, onWarning]);
 
   if (!deadline) return null;
 
   const text = formatDuration(remainingMs ?? 0);
-  const low = (remainingMs ?? 0) <= 60_000;
+  const minutesLeft = Math.floor((remainingMs ?? 0) / 60000);
+  const low = (remainingMs ?? 0) <= 60_000; // Last minute
+  const warning = minutesLeft <= 60 && minutesLeft > 1; // Less than 1 hour but more than 1 minute
 
   return (
     <div
       className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm font-medium ${
         low 
           ? "bg-red-100 text-red-700 border border-red-200" 
+          : warning
+          ? "bg-orange-100 text-orange-700 border border-orange-200"
           : "bg-[var(--muted)] text-[var(--foreground)] border border-[var(--border)]"
       }`}
       role="timer"
