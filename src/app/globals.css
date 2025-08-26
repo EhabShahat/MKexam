@@ -1068,8 +1068,9 @@ html[data-lt-installed] * {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
-}/
-* Body fallback for browsers that don't support svh */
+}
+
+/* Body fallback for browsers that don't support svh */
 body {
   min-height: 100vh; /* Fallback for older browsers */
   min-height: 100svh; /* Modern browsers with small viewport height support */
