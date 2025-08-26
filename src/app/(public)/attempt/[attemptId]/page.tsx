@@ -20,6 +20,28 @@ const noCopyStyle = `
   }
 `;
 
+// Helper functions
+function isQuestionAnswered(question: Question, answer: AnswerValue): boolean {
+  if (!answer) return false;
+  
+  switch (question.question_type) {
+    case "multiple_choice":
+    case "true_false":
+      return typeof answer === "string" && answer.trim() !== "";
+    case "multiple_select":
+      return Array.isArray(answer) && answer.length > 0;
+    case "short_answer":
+    case "paragraph":
+      return typeof answer === "string" && answer.trim() !== "";
+    default:
+      return false;
+  }
+}
+
+function countAnswered(answers: Record<string, AnswerValue>, questions: Question[]): number {
+  return questions.filter(q => isQuestionAnswered(q, answers[q.id])).length;
+}
+
 export default function AttemptPage() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,8 +66,10 @@ export default function AttemptPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(200); // Dynamic header height
   const { locale, dir } = useStudentLocale();
   const mainRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -202,19 +226,68 @@ export default function AttemptPage() {
   }
 
   async function onSubmit() {
-    if (!state) return;
+    if (!state || !attemptId) return;
+    
+    // Prevent double submission with more robust checks
+    if (submitting || state.completion_status === "submitted") {
+      console.log("Submission already in progress or completed");
+      return;
+    }
+    
+    // Check if we're already on thank you page (prevent loops)
+    if (window.location.pathname.includes('/thank-you/')) {
+      console.log("Already on thank you page, skipping submission");
+      return;
+    }
+    
+    console.log("Starting exam submission for attempt:", attemptId);
+    
     try {
       setSubmitting(true);
+      
+      // Save current state first
       await saveNow();
-      const res = await fetch(`/api/attempts/${attemptId}/submit`, { method: "POST" });
+      
+      const res = await fetch(`/api/attempts/${attemptId}/submit`, { 
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
       const data = await res.json();
+      
       if (!res.ok) throw new Error(data?.error || "Submit failed");
+      
+      // Update state to prevent further submissions
       setState((prev) => prev ? { ...prev, completion_status: "submitted", submitted_at: new Date().toISOString() } : prev);
-      // Redirect to thank you page
-      window.location.href = `/thank-you/${attemptId}`;
+      
+      console.log("Exam submitted successfully, redirecting to thank you page");
+      
+      // Use a more reliable redirect method for old browsers
+      const thankYouUrl = `/thank-you/${attemptId}`;
+      
+      // Add a small delay to ensure state is updated
+      setTimeout(() => {
+        try {
+          // Try the most compatible method first
+          if (typeof window.location.replace === 'function') {
+            window.location.replace(thankYouUrl);
+          } else if (typeof window.location.assign === 'function') {
+            window.location.assign(thankYouUrl);
+          } else {
+            window.location.href = thankYouUrl;
+          }
+        } catch (error) {
+          console.error("Redirect error:", error);
+          // Last resort - manual navigation
+          window.location = thankYouUrl as any;
+        }
+      }, 500);
+      
     } catch (e: any) {
+      console.error("Submission error:", e);
       setError(e?.message || "Submit error");
-    } finally {
       setSubmitting(false);
     }
   }
@@ -263,14 +336,12 @@ export default function AttemptPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [displayMode, questions.length]);
 
-  // Auto-collapse sidebar on small/medium screens (use 5:95). Expand on large screens (wider sidebar)
+  // Auto-collapse sidebar on mobile, expand on desktop
   useEffect(() => {
     try {
-      const mq = window.matchMedia("(min-width: 1024px)"); // lg breakpoint
-      // Collapse when below lg, expand at/above lg
+      const mq = window.matchMedia("(min-width: 768px)");
       setSidebarCollapsed(!mq.matches);
       const handler = (e: MediaQueryListEvent) => setSidebarCollapsed(!e.matches);
-      // Modern + legacy listeners
       if ("addEventListener" in mq) {
         mq.addEventListener("change", handler);
         return () => mq.removeEventListener("change", handler);
@@ -280,6 +351,28 @@ export default function AttemptPage() {
       }
     } catch {}
   }, []);
+
+  // Calculate header height dynamically
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        const height = headerRef.current.offsetHeight;
+        setHeaderHeight(height);
+      }
+    };
+
+    // Update on mount and resize
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    
+    // Small delay to ensure DOM is fully rendered
+    const timer = setTimeout(updateHeaderHeight, 100);
+    
+    return () => {
+      window.removeEventListener('resize', updateHeaderHeight);
+      clearTimeout(timer);
+    };
+  }, [state, answered, total]); // Re-calculate when content changes
 
   // Cleanup highlight timer
   useEffect(() => {
@@ -303,10 +396,22 @@ export default function AttemptPage() {
 
   if (!attemptId || loading) {
     return (
-      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-          <p className="text-[var(--muted-foreground)]">{t(locale, 'loading_exam')}</p>
+      <div dir={dir} lang={locale} className="loading-container mobile-safe">
+        <div className="text-center" style={{ padding: '2rem', maxWidth: '400px', margin: '0 auto' }}>
+          <div className="loading-spinner" style={{ margin: '0 auto 1rem auto' }}></div>
+          <p style={{ color: '#6b7280', fontSize: '16px', margin: 0, fontFamily: 'Arial, sans-serif' }}>{t(locale, 'loading_exam')}</p>
+          <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '0.5rem', fontFamily: 'Arial, sans-serif' }}>{t(locale, 'loading_exam_hint')}</p>
+          
+          {/* Fallback for very slow connections */}
+          <div style={{ marginTop: '2rem' }}>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="btn btn-outline"
+              style={{ fontSize: '14px', padding: '0.5rem 1rem' }}
+            >
+              {t(locale, 'try_again')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -314,22 +419,39 @@ export default function AttemptPage() {
 
   if (error) {
     return (
-      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
-        <div className="max-w-md mx-auto text-center p-8">
-          <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div dir={dir} lang={locale} style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        padding: '1rem',
+        width: '100%'
+      }}>
+        <div style={{ maxWidth: '400px', textAlign: 'center' }}>
+          <div style={{ 
+            width: '64px', 
+            height: '64px', 
+            margin: '0 auto 1.5rem auto', 
+            backgroundColor: '#fecaca', 
+            borderRadius: '50%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="15" y1="9" x2="9" y2="15"/>
               <line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
+          <h1 style={{ fontSize: '1.5rem', fontWeight: '600', color: '#0f172a', marginBottom: '1rem' }}>
             {t(locale, 'unable_load_exam')}
           </h1>
-          <p className="text-[var(--muted-foreground)] mb-6">{error}</p>
+          <p style={{ color: '#6b7280', marginBottom: '1.5rem', lineHeight: '1.5' }}>{error}</p>
           <button 
             onClick={() => window.location.reload()} 
             className="btn btn-primary"
+            style={{ fontSize: '16px', padding: '0.75rem 1.5rem' }}
           >
             {t(locale, 'try_again')}
           </button>
@@ -340,9 +462,16 @@ export default function AttemptPage() {
 
   if (!state) {
     return (
-      <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] flex items-center justify-center bg-[var(--background)]">
-        <div className="text-center">
-          <p className="text-[var(--muted-foreground)]">{t(locale, 'no_attempt_found')}</p>
+      <div dir={dir} lang={locale} style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        padding: '1rem',
+        width: '100%'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ color: '#6b7280', fontSize: '16px' }}>{t(locale, 'no_attempt_found')}</p>
         </div>
       </div>
     );
@@ -352,387 +481,498 @@ export default function AttemptPage() {
   const progressPercentage = total ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <div dir={dir} lang={locale} className="min-h-screen min-h-[100svh] bg-[var(--background)] grid grid-rows-[auto,1fr]">
+    <div dir={dir} lang={locale} style={{ 
+      minHeight: '100vh', 
+      width: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      margin: 0,
+      padding: 0
+    }}>
       {/* Add style tag for no-copy functionality */}
       <style dangerouslySetInnerHTML={{ __html: noCopyStyle }} />
-      {/* Header */}
-      <header className="bg-[var(--card)] border-b border-[var(--border)] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          {/* Title full row */}
-          <h1 className="text-xl sm:text-2xl font-semibold text-[var(--foreground)]">{state.exam.title}</h1>
+      
+      {/* Header - Fixed to Screen */}
+      <header 
+        ref={headerRef}
+        style={{ 
+          backgroundColor: 'var(--card)', 
+          borderBottom: '1px solid var(--border)', 
+          position: 'fixed', 
+          top: 0, 
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          width: '100%',
+          padding: '1rem'
+        }}>
+        {/* Title */}
+        <h1 style={{ 
+          fontSize: '1.25rem', 
+          fontWeight: '600', 
+          color: 'var(--foreground)',
+          margin: '0 0 0.5rem 0'
+        }}>
+          {state.exam.title}
+        </h1>
 
-          {/* Meta + Timer/Sync */}
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
-            {/* Left: progress meta */}
-            <div className="text-sm text-[var(--muted-foreground)] flex items-center gap-4">
-              <span>{t(locale, 'question_of_total', { current: currentIdx + 1, total })}</span>
+        {/* Meta Info */}
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: '1rem', 
+          alignItems: 'center',
+          fontSize: '0.875rem',
+          color: 'var(--muted-foreground)',
+          marginBottom: '1rem'
+        }}>
+          <span>{t(locale, 'question_of_total', { current: currentIdx + 1, total })}</span>
+          <span>•</span>
+          <span>{t(locale, 'x_answered', { count: answered })}</span>
+          {!isOnline && (
+            <>
               <span>•</span>
-              <span>{t(locale, 'x_answered', { count: answered })}</span>
-              {!isOnline && (
-                <>
-                  <span>•</span>
-                  <span className="text-orange-600 flex items-center gap-1">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 12h18m-9-9v18"/>
-                    </svg>
-                    {t(locale, 'offline')}
-                  </span>
-                </>
-              )}
-            </div>
+              <span style={{ color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 12h18m-9-9v18"/>
+                </svg>
+                {t(locale, 'offline')}
+              </span>
+            </>
+          )}
+        </div>
 
-            {/* Right: timer with sync underneath */}
-            <div className="flex flex-col items-start sm:items-end gap-2">
-              <Timer 
-                startedAt={state.started_at} 
-                durationMinutes={state.exam.duration_minutes} 
-                examEndsAt={state.exam.end_time} 
-                onExpire={onSubmit} 
-                disabled={disabled}
-              />
+        {/* Timer and Save Status */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          marginBottom: '1rem'
+        }}>
+          <Timer 
+            startedAt={state.started_at} 
+            durationMinutes={state.exam.duration_minutes} 
+            examEndsAt={state.exam.end_time} 
+            onExpire={onSubmit} 
+            disabled={disabled}
+          />
 
-              {/* Sync status under timer */}
-              <div className="flex items-center gap-2 text-sm">
-                {saveStatus === "saving" && (
-                  <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                    <div className="w-3 h-3 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    {t(locale, 'auto_syncing')}
-                  </div>
-                )}
-                {saveStatus === "saved" && lastSavedAt && (
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 6L9 17l-5-5"/>
-                    </svg>
-                    {t(locale, 'auto_saved')}
-                  </div>
-                )}
-                {saveStatus === "error" && (
-                  <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1 rounded-full">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <line x1="15" y1="9" x2="9" y2="15"/>
-                      <line x1="9" y1="9" x2="15" y2="15"/>
-                    </svg>
-                    {t(locale, 'sync_failed')}
-                  </div>
-                )}
-                {saveStatus === "idle" && (
-                  <div className="flex items-center gap-2 text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    {t(locale, 'auto_sync_enabled')}
-                  </div>
-                )}
+          {/* Save Status */}
+          <div style={{ fontSize: '0.875rem' }}>
+            {saveStatus === "saving" && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                color: '#2563eb',
+                backgroundColor: '#eff6ff',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px'
+              }}>
+                <div style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  border: '2px solid #bfdbfe', 
+                  borderTop: '2px solid #2563eb', 
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
+                {t(locale, 'auto_syncing')}
               </div>
-            </div>
+            )}
+            {saveStatus === "saved" && lastSavedAt && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                color: '#16a34a',
+                backgroundColor: '#f0fdf4',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px'
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                {t(locale, 'auto_saved')}
+              </div>
+            )}
+            {saveStatus === "error" && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                color: '#dc2626',
+                backgroundColor: '#fef2f2',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px'
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" y1="9" x2="9" y2="15"/>
+                  <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                {t(locale, 'sync_failed')}
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Progress Bar */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[var(--foreground)]">{t(locale, 'progress')}</span>
-              <span className="text-sm text-[var(--muted-foreground)]">{progressPercentage}%</span>
-            </div>
-            <div className="w-full bg-[var(--muted)] rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${progressPercentage}%` }}
-              ></div>
-            </div>
+        {/* Progress Bar */}
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '0.5rem'
+          }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{t(locale, 'progress')}</span>
+            <span style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>{progressPercentage}%</span>
+          </div>
+          <div style={{ 
+            width: '100%', 
+            backgroundColor: 'var(--muted)', 
+            borderRadius: '9999px', 
+            height: '8px'
+          }}>
+            <div 
+              style={{ 
+                backgroundColor: '#2563eb', 
+                height: '8px', 
+                borderRadius: '9999px',
+                width: `${progressPercentage}%`,
+                transition: 'width 0.3s ease'
+              }}
+            ></div>
           </div>
         </div>
       </header>
 
-      <div className="flex flex-row overflow-x-hidden">
-        {/* Sidebar - Question Navigation */}
-        <aside
-          className={`bg-[var(--card)] border-r border-[var(--border)] transition-all duration-300 shrink-0 sticky top-16 self-start overflow-visible flex flex-col max-h-[calc(100vh-4rem)]
-          ${sidebarCollapsed
-            ? 'basis-[48px] sm:basis-[48px] lg:basis-[64px] min-w-[48px]'
-            : 'basis-[5%] sm:basis-[5%] md:basis-[5%] lg:basis-[15%] xl:basis-[18%] 2xl:basis-[20%] min-w-[40px] lg:min-w-[240px]'}
-        `}>
-          <div className="p-2 h-full flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              {!sidebarCollapsed && (
-                <h2 className="font-semibold text-[var(--foreground)] block">{t(locale, 'questions')}</h2>
-              )}
-              <button
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="btn-icon inline-flex"
-                aria-label={sidebarCollapsed ? t(locale, 'expand_sidebar') : t(locale, 'collapse_sidebar')}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d={sidebarCollapsed ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6"}/>
-                </svg>
-              </button>
-            </div>
-
-            {/* Mobile and Collapsed View */}
-            {sidebarCollapsed ? (
-              <div className="flex-1 overflow-y-auto flex flex-col gap-2 pb-2 pr-1">
-                {questions.map((q, idx) => {
-                  const isAnswered = isQuestionAnswered(q, answers[q.id]);
-                  const isCurrent = idx === currentIdx;
-                  
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => handleJumpTo(idx)}
-                      className={`flex-shrink-0 w-6 h-6 rounded-full border text-xs font-medium transition-all duration-200 flex items-center justify-center select-none ${
-                        isCurrent 
-                          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm scale-110' 
-                          : isAnswered
-                          ? 'border-green-200 bg-green-600 text-white hover:brightness-110 hover:scale-105'
-                          : 'border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--ring)] hover:scale-105'
-                      }`}
-                      title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {/* Expanded View */}
+      {/* Main Content Area - Full Width Layout with Fixed Header Offset */}
+      <div style={{ 
+        display: 'flex', 
+        flex: 1,
+        width: '100%',
+        overflow: 'hidden',
+        marginTop: `${headerHeight}px` // Dynamic offset for fixed header
+      }}>
+        {/* Sidebar - Fixed to Screen */}
+        <aside style={{
+          backgroundColor: 'var(--card)',
+          borderRight: '1px solid var(--border)',
+          width: sidebarCollapsed ? '48px' : '200px',
+          minWidth: sidebarCollapsed ? '48px' : '200px',
+          height: `calc(100vh - ${headerHeight}px)`,
+          position: 'fixed',
+          left: 0,
+          top: `${headerHeight}px`, // Below fixed header
+          zIndex: 40,
+          overflow: 'auto',
+          padding: '0.5rem'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '1rem'
+          }}>
             {!sidebarCollapsed && (
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 pb-2">
-                {questions.map((q, idx) => {
-                  const isAnswered = isQuestionAnswered(q, answers[q.id]);
-                  const isCurrent = idx === currentIdx;
-                  
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => handleJumpTo(idx)}
-                      className={`w-full flex justify-center p-1 rounded-full border transition-all duration-200 ${
-                        isCurrent 
-                          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm' 
-                          : isAnswered
-                          ? 'border-green-200 bg-green-600 text-white hover:brightness-95'
-                          : 'border-[var(--border)] hover:border-[var(--ring)] hover:bg-[var(--muted)]/50'
-                      }`}
-                      title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
+              <h2 style={{ 
+                fontSize: '0.875rem', 
+                fontWeight: '600',
+                margin: 0
+              }}>
+                {t(locale, 'questions')}
+              </h2>
             )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: '0.375rem',
+                padding: '0.25rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label={sidebarCollapsed ? t(locale, 'expand_sidebar') : t(locale, 'collapse_sidebar')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d={sidebarCollapsed ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6"}/>
+              </svg>
+            </button>
+          </div>
 
-            {/* We've consolidated the collapsed view with the mobile view above */}
+          {/* Question Navigation */}
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '0.25rem'
+          }}>
+            {questions.map((q, idx) => {
+              const isAnswered = isQuestionAnswered(q, answers[q.id]);
+              const isCurrent = idx === currentIdx;
+              
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => handleJumpTo(idx)}
+                  style={{
+                    width: '100%',
+                    height: sidebarCollapsed ? '32px' : '36px',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border)',
+                    backgroundColor: isCurrent 
+                      ? 'var(--primary)' 
+                      : isAnswered
+                      ? '#16a34a'
+                      : 'var(--background)',
+                    color: isCurrent || isAnswered ? 'white' : 'var(--foreground)',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}
+                  title={`${t(locale, 'question_n', { n: idx + 1 })}${isAnswered ? ' ' + t(locale, 'answered_paren') : ''}`}
+                >
+                  {sidebarCollapsed ? idx + 1 : `${t(locale, 'question_n', { n: idx + 1 })}`}
+                </button>
+              );
+            })}
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main ref={mainRef} className="flex-1 min-w-0 p-4 sm:p-6 scroll-smooth no-copy" onCopy={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
-          <div className="max-w-4xl mx-auto">
-            {displayMode === "per_question" ? (
-              <div className="space-y-6">
-                {/* Current Question */}
-                {questions[currentIdx] && (
-                  <div className="bg-[var(--card)] rounded-lg border border-[var(--border)] p-6 shadow-sm hover:shadow-md transition-all duration-300">
-                    <ExamQuestion
-                      key={questions[currentIdx].id}
-                      q={questions[currentIdx]}
-                      value={answers[questions[currentIdx].id] as AnswerValue}
-                      onChange={(v) => onAnswerChange(questions[currentIdx], v)}
-                      onSave={saveNow}
-                      disabled={disabled}
-                    />
-                  </div>
-                )}
-
-                {/* Navigation */}
-                <div className="flex items-center justify-between">
-                  <button 
-                    className="btn btn-outline transition-all duration-200 hover:translate-x-[-2px]"
-                    onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))} 
-                    disabled={currentIdx === 0}
-                  >
-                    <span className="mr-1">←</span> {t(locale, 'previous')}
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button 
-                      className="btn btn-outline btn-sm transition-all duration-200 hover:scale-105"
-                      onClick={() => saveNow()}
-                      disabled={disabled}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                          <polyline points="17,21 17,13 7,13 7,21"/>
-                          <polyline points="7,3 7,8 15,8"/>
-                        </svg>
-                        {t(locale, 'save')}
-                      </svg>
-                    </button>
-
-                    {currentIdx === questions.length - 1 ? (
-                      <button 
-                        className="btn btn-primary transition-all duration-200 hover:scale-105"
-                        onClick={() => setShowSubmitConfirm(true)}
-                        disabled={disabled || submitting}
-                      >
-                        {submitting ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            {t(locale, 'submitting')}
-                          </>
-                        ) : (
-                          <>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M20 6L9 17l-5-5"/>
-                            </svg>
-                            {t(locale, 'submit_exam')}
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <button 
-                        className="btn btn-primary transition-all duration-200 hover:translate-x-[2px]"
-                        onClick={() => setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))} 
-                        disabled={currentIdx >= questions.length - 1}
-                      >
-                        {t(locale, 'next')} <span className="ml-1">→</span>
-                      </button>
-                    )}
-                  </div>
+        {/* Main Content - Full Width with Fixed Sidebar Offset */}
+        <main 
+          ref={mainRef} 
+          className="no-copy" 
+          style={{ 
+            flex: 1,
+            padding: '1rem',
+            overflow: 'auto',
+            width: `calc(100% - ${sidebarCollapsed ? '48px' : '200px'})`, // Full width minus sidebar
+            marginLeft: sidebarCollapsed ? '48px' : '200px', // Offset for fixed sidebar
+            height: `calc(100vh - ${headerHeight}px)`, // Full height minus header
+            position: 'relative'
+          }}
+          onCopy={(e) => e.preventDefault()} 
+          onCut={(e) => e.preventDefault()}
+        >
+          {displayMode === "per_question" ? (
+            <div style={{ width: '100%' }}>
+              {/* Current Question */}
+              {questions[currentIdx] && (
+                <div style={{
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '0.5rem',
+                  padding: '1.5rem',
+                  marginBottom: '1.5rem',
+                  width: '100%'
+                }}>
+                  <ExamQuestion
+                    key={questions[currentIdx].id}
+                    q={questions[currentIdx]}
+                    value={answers[questions[currentIdx].id] as AnswerValue}
+                    onChange={(v) => onAnswerChange(questions[currentIdx], v)}
+                    onSave={saveNow}
+                    disabled={disabled}
+                  />
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {questions.map((q, idx) => {
-                  const isFlash = flashId === q.id;
-                  return (
-                    <div
-                      key={q.id}
-                      ref={(el) => {
-                        questionRefs.current[q.id] = el;
-                      }}
-                      tabIndex={-1}
-                      className={`outline-none bg-[var(--card)] rounded-lg border border-[var(--border)] p-6 shadow-sm transition-all duration-300 ${
-                        isFlash
-                          ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[var(--background)]'
-                          : 'hover:shadow-md'
-                      }`}
-                    >
-                      <ExamQuestion
-                        q={q}
-                        value={answers[q.id] as AnswerValue}
-                        onChange={(v) => onAnswerChange(q, v)}
-                        onSave={saveNow}
-                        disabled={disabled}
-                      />
-                    </div>
-                  );
-                })}
+              )}
 
-                {/* Full-list actions */}
-                <div className="flex items-center justify-center gap-4 pt-6">
-                  <button
-                    className="btn btn-outline"
+              {/* Navigation */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                width: '100%'
+              }}>
+                <button 
+                  className="btn btn-outline"
+                  onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))} 
+                  disabled={currentIdx === 0}
+                  style={{ minWidth: '100px' }}
+                >
+                  <span style={{ marginRight: '0.25rem' }}>←</span> {t(locale, 'previous')}
+                </button>
+
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-outline btn-sm"
                     onClick={() => saveNow()}
                     disabled={disabled}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.25rem' }}>
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                       <polyline points="17,21 17,13 7,13 7,21"/>
                       <polyline points="7,3 7,8 15,8"/>
                     </svg>
-                    {t(locale, 'save_progress')}
+                    {t(locale, 'save')}
                   </button>
 
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => setShowSubmitConfirm(true)}
-                    disabled={disabled || submitting}
+                  {currentIdx === questions.length - 1 ? (
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => setShowSubmitConfirm(true)}
+                      disabled={disabled || submitting}
+                    >
+                      {submitting ? (
+                        <>
+                          <div style={{ 
+                            width: '16px', 
+                            height: '16px', 
+                            border: '2px solid white', 
+                            borderTop: '2px solid transparent', 
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                            marginRight: '0.5rem'
+                          }}></div>
+                          {t(locale, 'submitting')}
+                        </>
+                      ) : (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.25rem' }}>
+                            <path d="M20 6L9 17l-5-5"/>
+                          </svg>
+                          {t(locale, 'submit_exam')}
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => setCurrentIdx((i) => Math.min(questions.length - 1, i + 1))} 
+                      disabled={currentIdx >= questions.length - 1}
+                      style={{ minWidth: '100px' }}
+                    >
+                      {t(locale, 'next')} <span style={{ marginLeft: '0.25rem' }}>→</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Full View Mode */
+            <div style={{ width: '100%' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {questions.map((q, idx) => (
+                  <div
+                    key={q.id}
+                    ref={(el) => { questionRefs.current[q.id] = el; }}
+                    style={{
+                      backgroundColor: 'var(--card)',
+                      border: flashId === q.id ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      borderRadius: '0.5rem',
+                      padding: '1.5rem',
+                      width: '100%',
+                      transition: 'border-color 0.3s ease'
+                    }}
                   >
-                    {submitting ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        {t(locale, 'submitting')}
-                      </>
-                    ) : (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5"/>
-                        </svg>
-                        {t(locale, 'submit_exam')}
-                      </>
-                    )}
-                  </button>
-                </div>
+                    <ExamQuestion
+                      q={q}
+                      value={answers[q.id] as AnswerValue}
+                      onChange={(v) => onAnswerChange(q, v)}
+                      onSave={saveNow}
+                      disabled={disabled}
+                    />
+                  </div>
+                ))}
               </div>
-            )}
-            
-            {disabled && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-                <div className="flex items-center justify-center gap-2 text-green-800">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 6L9 17l-5-5"/>
-                  </svg>
-                  <span className="font-medium">{t(locale, 'exam_submitted_successfully')}</span>
-                </div>
-                <p className="text-green-700 text-sm mt-1">
-                  {t(locale, 'answers_recorded_close_hint')}
-                </p>
+
+              {/* Submit Button */}
+              <div style={{ 
+                marginTop: '2rem', 
+                display: 'flex', 
+                justifyContent: 'center',
+                width: '100%'
+              }}>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setShowSubmitConfirm(true)}
+                  disabled={disabled || submitting}
+                  style={{ minWidth: '200px' }}
+                >
+                  {submitting ? (
+                    <>
+                      <div style={{ 
+                        width: '16px', 
+                        height: '16px', 
+                        border: '2px solid white', 
+                        borderTop: '2px solid transparent', 
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        marginRight: '0.5rem'
+                      }}></div>
+                      {t(locale, 'submitting')}
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.5rem' }}>
+                        <path d="M20 6L9 17l-5-5"/>
+                      </svg>
+                      {t(locale, 'submit_exam')}
+                    </>
+                  )}
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </main>
       </div>
 
       {/* Submit Confirmation Modal */}
       {showSubmitConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 modal-backdrop">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600">
-                  <path d="M20 6L9 17l-5-5"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">{t(locale, 'submit_exam_q')}</h3>
-                <p className="text-sm text-[var(--muted-foreground)]">{t(locale, 'cannot_be_undone')}</p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <div className="bg-[var(--muted)] rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-[var(--muted-foreground)]">{t(locale, 'total_questions')}</span>
-                    <span className="font-medium ml-2">{total}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--muted-foreground)]">{t(locale, 'answered_label')}</span>
-                    <span className="font-medium ml-2">{answered}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--muted-foreground)]">{t(locale, 'unanswered_label')}</span>
-                    <span className="font-medium ml-2">{total - answered}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--muted-foreground)]">{t(locale, 'progress_label')}</span>
-                    <span className="font-medium ml-2">{progressPercentage}%</span>
-                  </div>
-                </div>
-              </div>
-              
-              {total - answered > 0 && (
-                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="text-orange-800 text-sm">
-                    <strong>{t(locale, 'warning')}</strong> {t(locale, 'unanswered_warning', { count: total - answered })}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 justify-end">
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--card)',
+            borderRadius: '0.5rem',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '100%',
+            border: '1px solid var(--border)'
+          }}>
+            <h3 style={{ 
+              fontSize: '1.125rem', 
+              fontWeight: '600', 
+              marginBottom: '1rem',
+              margin: '0 0 1rem 0'
+            }}>
+              {t(locale, 'confirm_submission')}
+            </h3>
+            <p style={{ 
+              color: 'var(--muted-foreground)', 
+              marginBottom: '1.5rem',
+              lineHeight: '1.5',
+              margin: '0 0 1.5rem 0'
+            }}>
+              {t(locale, 'submit_warning')}
+            </p>
+            <div style={{ 
+              display: 'flex', 
+              gap: '0.75rem', 
+              justifyContent: 'flex-end'
+            }}>
               <button 
                 className="btn btn-outline"
                 onClick={() => setShowSubmitConfirm(false)}
@@ -748,66 +988,22 @@ export default function AttemptPage() {
                 }}
                 disabled={submitting}
               >
-                {submitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    {t(locale, 'submitting')}
-                  </>
-                ) : (
-                  t(locale, 'confirm_submit_exam')
-                )}
+                {t(locale, 'yes_submit')}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-function countAnswered(answers: Record<string, AnswerValue>, questions: Question[]) {
-  let count = 0;
-  for (const q of questions) {
-    if (isQuestionAnswered(q, answers[q.id])) {
-      count++;
-    }
-  }
-  return count;
-}
-
-function isQuestionAnswered(question: Question, value: AnswerValue): boolean {
-  if (question.question_type === "paragraph") {
-    return typeof value === "string" && value.trim().length > 0;
-  } else if (question.question_type === "true_false") {
-    return typeof value === "boolean";
-  } else if (Array.isArray(value)) {
-    return value.length > 0;
-  } else if (typeof value === "string") {
-    return value.length > 0;
-  }
-  return false;
-}
-
-function QuestionNav({ count, current, onJump }: { count: number; current: number; onJump: (i: number) => void }) {
-  const items = Array.from({ length: count }, (_, i) => i);
-  return (
-    <div className="flex flex-wrap gap-2 justify-center">
-      {items.map((i) => (
-        <button
-          key={i}
-          className={
-            "w-8 h-8 rounded-lg border text-sm font-medium transition-all duration-200 select-none " + 
-            (i === current 
-              ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm transform scale-110" 
-              : "bg-[var(--card)] hover:bg-[var(--accent)] hover:border-[var(--ring)] hover:text-[var(--accent-foreground)] hover:scale-105")
+      {/* Add CSS animation for spinner */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
           }
-          onClick={() => onJump(i)}
-          aria-current={i === current ? "page" : undefined}
-          title={`Go to question ${i + 1}`}
-        >
-          {i + 1}
-        </button>
-      ))}
+        `
+      }} />
     </div>
   );
 }

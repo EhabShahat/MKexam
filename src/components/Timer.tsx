@@ -20,12 +20,28 @@ export default function Timer({
 
   const deadline = useMemo(() => {
     const deadlines: number[] = [];
-    if (durationMinutes && durationMinutes > 0) {
-      deadlines.push(new Date(startedAt).getTime() + durationMinutes * 60_000);
+    
+    try {
+      if (durationMinutes && durationMinutes > 0) {
+        const startTime = new Date(startedAt).getTime();
+        // Check if date parsing was successful
+        if (!isNaN(startTime)) {
+          deadlines.push(startTime + durationMinutes * 60_000);
+        }
+      }
+      
+      if (examEndsAt) {
+        const endTime = new Date(examEndsAt).getTime();
+        // Check if date parsing was successful
+        if (!isNaN(endTime)) {
+          deadlines.push(endTime);
+        }
+      }
+    } catch (error) {
+      console.warn("Timer: Error parsing dates", error);
+      return null;
     }
-    if (examEndsAt) {
-      deadlines.push(new Date(examEndsAt).getTime());
-    }
+    
     if (deadlines.length === 0) return null;
     return Math.min(...deadlines);
   }, [startedAt, durationMinutes, examEndsAt]);
@@ -38,13 +54,23 @@ export default function Timer({
   const remainingMs = deadline ? Math.max(0, deadline - now) : null;
 
   useEffect(() => {
-    if (!deadline || disabled) return;
-    if (remainingMs === 0 && !firedRef.current) {
+    if (!deadline || disabled || firedRef.current) return;
+    
+    // Add safety check - only fire if we're really at 0 and have been running for at least 30 seconds
+    const startTime = new Date(startedAt).getTime();
+    const hasBeenRunning = (Date.now() - startTime) > 30000; // 30 seconds minimum
+    const isReallyExpired = remainingMs === 0 && Date.now() >= deadline;
+    
+    if (isReallyExpired && hasBeenRunning) {
+      console.log("Timer expired, submitting exam");
       firedRef.current = true;
-      onExpire();
+      // Add a small delay to prevent race conditions
+      setTimeout(() => {
+        onExpire();
+      }, 1000);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingMs, deadline, disabled]);
+  }, [remainingMs, deadline, disabled, startedAt]);
 
   if (!deadline) return null;
 

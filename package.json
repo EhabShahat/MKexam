@@ -48,14 +48,19 @@
   },
   "browserslist": {
     "production": [
-      "last 2 iOS major versions",
-      "iOS >= 12",
-      "Safari >= 12",
-      "Android >= 7",
-      "ChromeAndroid >= 80",
-      "Chrome >= 80",
-      "Firefox >= 78",
-      "Edge >= 80"
+      "> 0.5%",
+      "last 2 versions",
+      "iOS >= 10",
+      "Safari >= 10",
+      "Android >= 5",
+      "ChromeAndroid >= 60",
+      "Chrome >= 60",
+      "Firefox >= 60",
+      "Edge >= 16",
+      "Samsung >= 8",
+      "UCAndroid >= 12",
+      "not dead",
+      "not op_mini all"
     ],
     "development": [
       "last 1 chrome version",

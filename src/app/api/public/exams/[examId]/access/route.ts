@@ -54,7 +54,7 @@ export async function POST(
     const cookieStore = await cookies();
     cookieStore.set("attemptId", attemptId, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production", // Only secure in production (HTTPS)
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 3, // 3h safe default

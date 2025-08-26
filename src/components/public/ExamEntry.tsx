@@ -158,7 +158,17 @@ export default function ExamEntry({
 
       const attemptId = data.attemptId as string;
       const studentNameFromResponse = data.studentName || studentName || "Student";
-      router.push(`/welcome/${attemptId}?name=${encodeURIComponent(studentNameFromResponse)}`);
+      
+      // Use window.location for better compatibility with old browsers
+      const welcomeUrl = `/welcome/${attemptId}?name=${encodeURIComponent(studentNameFromResponse)}`;
+      
+      // Try modern router first, fallback to window.location
+      try {
+        router.push(welcomeUrl);
+      } catch (error) {
+        // Fallback for old browsers
+        window.location.href = welcomeUrl;
+      }
     } catch {
       setError(t(locale, "unable_load_exam"));
     } finally {

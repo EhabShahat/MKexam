@@ -4,19 +4,14 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  async redirects() {
-    return [
-      {
-        source: "/results",
-        destination: "/",
-        permanent: false,
-      },
-      {
-        source: "/exam/:examId",
-        destination: "/",
-        permanent: false,
-      },
-    ];
+  // Experimental features (Turbopack compatible)
+  experimental: {
+    // Add any Turbopack-compatible experimental features here if needed
+  },
+  // Add browser compatibility
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === "production",
   },
 };
 

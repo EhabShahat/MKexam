@@ -43,12 +43,68 @@
 
 /* Dark mode disabled: forcing light theme */
 
+/* Enhanced mobile compatibility */
+html {
+  height: 100%;
+  height: 100vh;
+  height: 100svh;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande';
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent bounce scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* Fix for older browsers */
+* {
+  box-sizing: border-box;
+}
+
+*:before,
+*:after {
+  box-sizing: border-box;
+}
+
+/* Mobile-first responsive design */
+@media screen and (max-width: 768px) {
+  html {
+    font-size: 16px; /* Prevent zoom on input focus */
+  }
+  
+  body {
+    font-size: 16px; /* Prevent zoom on input focus */
+  }
+}
+
+/* Fix for very old Android browsers */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    -webkit-text-size-adjust: none;
+  }
 }
 
 /* Arabic text support */
@@ -82,6 +138,92 @@ body {
   text-align: right;
 }
 
+/* Mobile compatibility fixes */
+.mobile-safe {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for white screen issue on old mobile browsers */
+.page-container {
+  min-height: 100vh;
+  min-height: 100svh;
+  width: 100%;
+  background: var(--background);
+  position: relative;
+}
+
+/* Ensure content is visible on all devices */
+.content-wrapper {
+  width: 100%;
+  max-width: 100vw;
+  padding: 0;
+  margin: 0;
+  background: var(--background);
+}
+
+/* Full width content for mobile - remove centering and max-width constraints */
+@media screen and (max-width: 768px) {
+  .content-wrapper .max-w-4xl {
+    max-width: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* Reduce padding on mobile for more content space */
+  .content-wrapper {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Fix for gradient backgrounds on old browsers */
+.gradient-bg {
+  background: #f7f8fa; /* Fallback */
+  background: var(--background); /* Modern browsers */
+}
+
+/* Loading screen improvements for old browsers */
+.loading-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: #f7f8fa;
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  /* Suppress Next.js auto-scroll warnings for full-screen loading overlay */
+  scroll-behavior: auto;
+}
+
+/* Spinner that works on old browsers */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  -webkit-animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+
 /* ---- Simple UI primitives (work in both Tailwind v4 and plain CSS) ---- */
 
 .label {
@@ -107,9 +249,16 @@ body {
   color: var(--foreground);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem 1rem; /* Larger padding for mobile */
   line-height: 1.5;
+  font-size: 16px; /* Prevent zoom on iOS */
   transition: box-shadow .15s ease, border-color .15s ease, background .15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* Prevent zoom on focus */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .input:focus,
@@ -126,13 +275,25 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
+  padding: 0.75rem 1.25rem; /* Larger padding for mobile */
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--foreground);
   font-weight: 600;
+  font-size: 16px; /* Prevent zoom on iOS */
+  min-height: 44px; /* Apple's recommended touch target size */
   transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  text-decoration: none;
+  /* Prevent text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .btn:hover { background: color-mix(in srgb, var(--card) 85%, var(--foreground) 15%); }
@@ -575,4 +736,336 @@ body {
 .stats-card:hover {
   border-color: var(--primary);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* ===== MOBILE COMPATIBILITY FIXES ===== */
+
+/* Fix for old Android browsers (Android 4.x and below) */
+@media screen and (-webkit-min-device-pixel-ratio: 0) and (max-width: 768px) {
+  .gradient-bg {
+    background: #f7f8fa !important;
+  }
+  
+  .btn {
+    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+  }
+  
+  .input, .select, .textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Fix for very old browsers (IE11, old Safari) */
+@supports not (display: grid) {
+  .grid {
+    display: block;
+  }
+  
+  .flex {
+    display: block;
+  }
+  
+  .flex > * {
+    display: inline-block;
+    vertical-align: top;
+  }
+}
+
+/* Fix for browsers that don't support CSS variables */
+@supports not (color: var(--primary)) {
+  :root {
+    --background: #f7f8fa;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --primary: #2563eb;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+  }
+  
+  body {
+    background: #f7f8fa;
+    color: #0f172a;
+  }
+  
+  .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+  }
+  
+  .card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+  }
+}
+
+/* Mobile-specific improvements */
+@media screen and (max-width: 768px) {
+  /* Prevent horizontal scroll */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+  
+  /* Larger touch targets */
+  .btn, .input, .select, .textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  
+  /* Better spacing on mobile */
+  .p-4 {
+    padding: 1rem;
+  }
+  
+  .p-6 {
+    padding: 1.5rem;
+  }
+  
+  /* Fix for modal on mobile */
+  .modal-content {
+    margin: 0.5rem;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100svh - 1rem);
+  }
+  
+  /* Better sidebar on mobile */
+  .sidebar-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    height: 100svh;
+    z-index: 50;
+  }
+}
+
+/* Fix for iPhone X and newer (safe area) */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Fix for Samsung Internet and other WebKit browsers */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    -webkit-appearance: none;
+    -webkit-border-radius: 10px;
+  }
+  
+  .btn {
+    -webkit-appearance: none;
+    -webkit-border-radius: 10px;
+  }
+}
+
+/* Fix for UC Browser and other mobile browsers */
+@media screen and (max-width: 768px) {
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Better button styling for touch */
+  button,
+  .btn {
+    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Fix for loading screens */
+  .loading-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100svh;
+    background: #f7f8fa;
+    z-index: 9999;
+    /* Suppress Next.js auto-scroll warnings for full-screen loading overlay */
+    scroll-behavior: auto;
+  }
+}
+
+/* Fix for landscape orientation on mobile */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+  
+  /* Adjust header height in landscape */
+  .header-mobile {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* Specific fixes for common old mobile browsers */
+
+/* Android Browser 4.x fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .btn {
+    -webkit-transform: translateZ(0); /* Force hardware acceleration */
+    transform: translateZ(0);
+  }
+  
+  .input, .select, .textarea {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Samsung Internet fixes */
+@supports (-webkit-appearance: none) {
+  .input:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}
+
+/* UC Browser fixes */
+@media screen and (max-width: 768px) {
+  /* Force repaint to fix white screen issues */
+  .page-container {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Fix for UC Browser's aggressive caching */
+  .content-wrapper {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Opera Mini fixes */
+@media all and (-webkit-min-device-pixel-ratio: 0) and (min-resolution: .001dpcm) {
+  .gradient-bg {
+    background: #f7f8fa !important;
+  }
+  
+  .loading-spinner {
+    border: 4px solid #e5e7eb !important;
+    border-top: 4px solid #2563eb !important;
+  }
+}
+
+/* Xiaomi Browser fixes */
+@media screen and (max-width: 768px) {
+  /* Fix for Xiaomi's built-in browser */
+  body {
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+  }
+  
+  .btn, .input, .select, .textarea {
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+  }
+}
+
+/* Huawei Browser fixes */
+@supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+  .modal-content {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.95);
+  }
+}
+
+/* Fallback for browsers that don't support svh */
+@supports not (height: 100svh) {
+  .min-h-screen {
+    min-height: 100vh;
+  }
+  
+  .h-screen {
+    height: 100vh;
+  }
+}
+/* Br
+owser-specific fixes to prevent hydration mismatch */
+/* These replace the JavaScript-based fixes that were causing hydration issues */
+
+/* Fix for old Android browsers - prevent white screen */
+/* Removed transform: translateZ(0) as it was blocking touch scrolling on mobile */
+
+/* UC Browser specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    min-height: 100vh;
+    background: #f7f8fa;
+  }
+}
+
+/* Samsung Internet and WebKit browsers - text-size-adjust already set in layout.tsx */
+
+/* Prevent browser extension interference */
+html[data-lt-installed],
+html[data-lt-installed] * {
+  /* Reset any translator extension modifications */
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}/*
+ Mobile-first full width layout */
+@media screen and (max-width: 768px) {
+  /* Make header use full width */
+  .header-mobile > div {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0.75rem !important;
+  }
+  
+  /* Remove unnecessary margins and max-widths on mobile */
+  .page-container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Ensure sidebar takes minimal space on mobile */
+  aside {
+    min-width: 48px !important;
+  }
+  
+  /* Full width main content area */
+  main.content-wrapper {
+    padding: 0.5rem !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Remove centering containers */
+  .mx-auto {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Full width cards and content */
+  .max-w-4xl,
+  .max-w-xl,
+  .max-w-lg {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
 }

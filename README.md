@@ -1,100 +1,225 @@
 # Advanced Exam Application
 
-Light-only, minimal UI exam platform with Supabase backend, Admin UI, WhatsApp integration, and student attempt flow. This is a refactored version with unnecessary documentation and debug components removed.
+A comprehensive, production-ready exam platform built with Next.js 15, React 19, and Supabase. Features a light-only minimal UI, complete admin management system, WhatsApp integration, and robust student exam flow with Arabic/English localization support.
 
-## Quickstart
+## ✨ Key Features
 
-1) Install dependencies (peer deps):
+- **🎯 Student Experience**: Secure exam entry with codes, auto-save functionality, offline recovery, and built-in timers
+- **👨‍💼 Admin Management**: Complete exam lifecycle management including creation, question management, global student administration, and results analysis  
+- **📱 WhatsApp Integration**: Server capability to send codes via WhatsApp Cloud API with customizable templates
+- **📊 Real-time Monitoring**: Live activity tracking, attempt monitoring, and comprehensive audit logging
+- **📁 Multi-format Support**: CSV/XLSX import/export for questions, students, and results
+- **🔒 Security Features**: IP tracking, attempt validation, and comprehensive audit trails
+- **🌍 Internationalization**: Full Arabic and English support with RTL layout
+- **♿ Accessibility**: WCAG compliant with screen reader support and keyboard navigation
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
 
 ```bash
 npm ci --legacy-peer-deps
 ```
 
-2) Configure environment variables in `.env.local`:
+### 2. Environment Configuration
+
+Create `.env.local` with your Supabase credentials:
 
 ```bash
+# Supabase Configuration (Required)
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-# Optional in local dev, server-only in production
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# WhatsApp (optional for sending codes)
+# App Configuration
+APP_BRAND_NAME="Advanced Exam App"
+SESSION_PASSWORD=your-32-character-session-password
+ADMIN_EMAILS="admin@example.com"
+
+# WhatsApp Integration (Optional)
 WHATSAPP_TOKEN=your_whatsapp_token
 WHATSAPP_PHONE_ID=your_whatsapp_phone_id
 ```
 
-3) Start dev server:
+### 3. Database Setup
+
+Run the database setup script to create tables and initial data:
+
+```bash
+npm run setup:database
+```
+
+### 4. Start Development Server
 
 ```bash
 npm run dev
-# default: http://localhost:3000
+# Server runs at: http://localhost:3000
 ```
 
-4) Bootstrap admin: sign in via `/admin/login`. The first authenticated user is promoted to admin (see `admin_users`).
+### 5. Admin Access
 
-## Key Routes
+- **Default Admin**: Username: `ehab`, Password: `436762`
+- **Admin Panel**: Navigate to `/admin/login`
+- **First-time Setup**: The first authenticated user is automatically promoted to admin
 
-- Public
-  - `/(public)/exam/[examId]` — exam entry
-  - `/(public)/attempt/[attemptId]` — take exam (auto-save, offline recovery, timers)
+## 🗺️ Application Routes
 
-- Admin
-  - `/admin` — dashboard shell
-  - `/admin/exams` — exams list/create/edit/duplicate/publish/archive
-  - `/admin/exams/[examId]/questions` — manage questions + reorder + CSV/XLSX import
-  - `/admin/exams/[examId]/codes` — generate/import codes (backed by global `students.code`) and WhatsApp send
-  - `/admin/exams/[examId]/students` — manage students (add/edit/delete/import)
-  - `/admin/results` — results overview and exports (CSV/XLSX/PDF)
-  - `/admin/monitoring` — live activity (active attempts, recent submissions)
-  - `/admin/audit` — audit logs
-  - `/admin/settings` — global settings (branding, language, templates)
+### Public Routes (Student-facing)
+- **`/`** — Home page with exam entry or results based on system mode
+- **`/welcome/[attemptId]`** — Pre-exam instructions and welcome page
+- **`/attempt/[attemptId]`** — Main exam interface with auto-save and offline recovery
+- **`/thank-you/[attemptId]`** — Post-submission confirmation page
+- **`/results`** — Public results portal for students to check their scores
 
-## Development
+### Admin Routes (Protected)
+- **`/admin`** — Admin dashboard with system overview
+- **`/admin/login`** — Admin authentication page
+- **`/admin/exams`** — Exam management (create/edit/duplicate/publish/archive)
+- **`/admin/exams/[examId]/questions`** — Question management with drag-and-drop reordering
+- **`/admin/exams/[examId]/students`** — Student management and code generation
+- **`/admin/students`** — Global student database management
+- **`/admin/results`** — Results analysis and export capabilities
+- **`/admin/monitoring`** — Live activity monitoring and attempt tracking
+- **`/admin/audit`** — Comprehensive audit log viewer
+- **`/admin/settings`** — Global settings (branding, language, WhatsApp templates)
 
-- Light-only UI primitives in `src/app/globals.css`: `.btn`, `.card`, `.input`, `.select`, `.textarea`, `.table`, `.label`, `.link`.
-- React Query v5 for data fetching/mutations.
-- Supabase client in `src/lib/supabase/*`.
-- Auth: `src/components/AdminGuard.tsx`, `src/hooks/useAdmin.ts`.
+## 🛠️ Development
 
-Scripts:
+### Architecture Overview
+- **Framework**: Next.js 15 with App Router and React 19
+- **Database**: Supabase (PostgreSQL) with Row Level Security
+- **Styling**: Tailwind CSS v4 with custom UI primitives
+- **State Management**: React Query v5 for server state
+- **Authentication**: Custom auth system with JWT tokens
+- **Internationalization**: Custom i18n with Arabic/English support
+
+### UI System
+Light-only UI primitives defined in `src/app/globals.css`:
+- `.btn` — Button components with variants
+- `.card` — Card containers with consistent styling
+- `.input`, `.select`, `.textarea` — Form controls
+- `.table` — Data table styling
+- `.label`, `.link` — Typography elements
+
+### Development Scripts
 
 ```bash
-npm run dev        # start dev (Turbopack)
-npm run build      # production build
-npm run start      # start production server
-npm run lint       # lint
-npm run type-check # type check (CI)
+npm run dev              # Start development server (Turbopack)
+npm run build            # Production build
+npm run start            # Start production server
+npm run lint             # ESLint code checking
+npm run type-check       # TypeScript type checking
+
+# Database utilities
+npm run setup:database   # Initialize database schema
+npm run setup:storage    # Setup Supabase storage buckets
+npm run setup:logo       # Configure logo storage
 ```
 
-## Deployment (Netlify)
+### Key Development Files
+- **Supabase Client**: `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`
+- **Authentication**: `src/components/AdminGuard.tsx`, `src/hooks/useAdmin.ts`
+- **Internationalization**: `src/i18n/student.ts`
+- **Database Schema**: `db/schema.sql`, `db/security.sql`, `db/rpc_functions.sql`
 
-- A basic CI workflow is provided in `.github/workflows/ci.yml`.
-- Add a `netlify.toml` (included) using Node 20 and legacy peer deps install.
-- Set environment variables in your Netlify site settings: the same keys from `.env.local`.
+## 🚀 Deployment
 
-## Database Notes (Supabase)
+### Netlify Deployment
+1. **CI/CD Pipeline**: Automated workflow in `.github/workflows/ci.yml`
+2. **Build Configuration**: `netlify.toml` configured for Node.js 20
+3. **Environment Variables**: Set the same variables from `.env.local` in Netlify dashboard
+4. **Build Command**: `npm run build` with legacy peer deps support
 
-- Core tables: `exams`, `questions`, `students`, `student_exam_attempts`, `exam_attempts`, `exam_results`, `exam_ips`, `audit_logs`, `admin_users`, `app_settings`.
-- View: `student_exam_summary` (global per-student stats).
-- `exam_attempts.student_id` references `students(id)`.
-- RPCs: `start_attempt`, `get_attempt_state`, `save_attempt`, `submit_attempt`.
-- Global settings: create a single-row `app_settings` table with text fields `brand_name`, `brand_logo_url`, `default_language`, `whatsapp_default_template` (UI/API will report `not_configured` until present).
-- Logo storage: run `npm run setup:storage` to create Supabase storage bucket for logo uploads.
-- Recommended indexes: see `ROADMAP.md` Phase 1.
+### Environment Variables for Production
+```bash
+# Required for all deployments
+NEXT_PUBLIC_SUPABASE_URL=your_production_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_production_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_production_service_role_key
+APP_BRAND_NAME="Your Exam Platform"
+SESSION_PASSWORD=secure-32-character-password
+ADMIN_EMAILS="admin1@example.com,admin2@example.com"
 
-## CSV/XLSX Import Columns
+# Optional WhatsApp integration
+WHATSAPP_TOKEN=your_whatsapp_token
+WHATSAPP_PHONE_ID=your_whatsapp_phone_id
+```
 
-- Questions: type-specific columns with validation (see UI preview page).
-- Students: `student_name`, `mobile_number`, `code` (unique). The Admin UI can generate codes if omitted during import.
+## 🗄️ Database Architecture
 
-## Next Steps
+### Core Tables
+- **`exams`** — Exam definitions with settings and scheduling
+- **`questions`** — Question bank with multiple question types
+- **`students`** — Global student registry with unique codes
+- **`student_exam_attempts`** — Per-exam attempt tracking
+- **`exam_attempts`** — Individual attempt sessions with answers
+- **`exam_results`** — Calculated scores and analytics
+- **`exam_ips`** — IP whitelist/blacklist rules
+- **`audit_logs`** — Comprehensive activity logging
+- **`admin_users`** — Admin user management
+- **`app_config`** — System-wide configuration
 
-Start with `ROADMAP.md` — it tracks phases, current status, and prioritized next steps. Common next tasks:
+### Database Views
+- **`student_exam_summary`** — Aggregated student statistics across all exams
 
-- Create `app_settings` table, configure brand/template, then revisit `/admin/settings`.
-- Accessibility pass on UI (Phase 2).
-- Configure Netlify environment and enable CI (Phase 10).
+### Stored Procedures (RPCs)
+- **`start_attempt`** — Initialize new exam attempt
+- **`get_attempt_state`** — Retrieve current attempt status
+- **`save_attempt`** — Auto-save student progress
+- **`submit_attempt`** — Finalize and score exam submission
 
-Documentation lives primarily in `README.md`, `ROADMAP.md`, and steering notes under `.kiro/steering/`.
+### Security Features
+- **Row Level Security (RLS)** — Granular access control
+- **IP Tracking** — Geographic and network-based restrictions
+- **Audit Logging** — Complete activity trail
+- **Attempt Validation** — Prevent duplicate submissions
 
-Optional security hardening in Supabase Auth: enable leaked password protection and MFA.
+## 📊 Data Import/Export
+
+### Supported Formats
+- **Questions**: CSV/XLSX with type-specific validation
+- **Students**: CSV/XLSX with `student_name`, `mobile_number`, `code`
+- **Results**: Export to CSV, XLSX, or PDF formats
+
+### Import Validation
+- Real-time preview with error reporting
+- Line-by-line validation feedback
+- Automatic code generation for students
+- Duplicate detection and handling
+
+## 🔧 System Configuration
+
+### Multi-Mode Operation
+- **Exam Mode**: Standard exam delivery
+- **Results Mode**: Public results portal only
+- **Disabled Mode**: System maintenance with custom message
+
+### Localization Support
+- **Languages**: English and Arabic with RTL support
+- **Customizable**: Welcome messages, instructions, and thank you pages
+- **Font Support**: Tajawal font for Arabic text rendering
+
+## 📚 Documentation & Resources
+
+### 📖 User Guides
+- **[Administrator Guide](ADMIN_GUIDE.md)** - Complete admin panel documentation
+- **[Student Guide](STUDENT_GUIDE.md)** - How to take exams and use student features
+
+### 🔧 Technical Documentation
+- **[Project Roadmap](ROADMAP.md)** - Development phases and completion status
+- **[Testing Summary](TESTING_SUMMARY.md)** - Quality assurance and test results
+- **[Technology Stack](.kiro/steering/tech.md)** - Technical architecture details
+- **[Product Overview](.kiro/steering/product.md)** - Feature specifications
+
+### 🗄️ Database Resources
+- **Database Scripts**: Schema and setup files in `db/` directory
+- **Migration Files**: SQL files for database initialization
+- **Security Policies**: Row Level Security configurations
+
+## 🔒 Security Recommendations
+
+- Enable Supabase Auth security features (leaked password protection, MFA)
+- Use strong session passwords (32+ characters)
+- Regularly review audit logs for suspicious activity
+- Implement IP restrictions for sensitive exams
+- Keep dependencies updated with `npm audit`

@@ -109,7 +109,15 @@ function WelcomePageInner() {
 
   const handleStartExam = () => {
     if (attemptId) {
-      router.push(`/attempt/${attemptId}`);
+      const attemptUrl = `/attempt/${attemptId}`;
+      
+      // Use window.location for better compatibility with old browsers
+      try {
+        router.push(attemptUrl);
+      } catch (error) {
+        // Fallback for old browsers
+        window.location.href = attemptUrl;
+      }
     }
   };
 
