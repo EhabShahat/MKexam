@@ -3,6 +3,7 @@ import { Tajawal } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import StorageCleaner from "@/components/StorageCleaner";
+import StudentStorageCleaner from "@/components/StudentStorageCleaner";
 
 const appSans = Tajawal({
   variable: "--font-app-sans",
@@ -123,6 +124,7 @@ export default function RootLayout({
         }}
       >
         <StorageCleaner />
+        <StudentStorageCleaner />
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
       </body>

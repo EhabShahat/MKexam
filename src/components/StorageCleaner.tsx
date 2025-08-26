@@ -8,7 +8,7 @@ import { useEffect } from "react";
  */
 export default function StorageCleaner() {
   useEffect(() => {
-    // Clear all storage on app load
+    // ALWAYS clear all storage on app load for students
     try {
       const currentPath = window.location.pathname;
       
@@ -17,35 +17,16 @@ export default function StorageCleaner() {
         return;
       }
 
-      // Check if admin has forced a clear for students
-      const forceClear = localStorage.getItem('force_clear_student_storage');
+      // AUTOMATIC CLEARING: Always clear everything for students
+      // This ensures students get a completely fresh experience every single time
       
-      if (forceClear === 'true') {
-        // Clear everything when force clear is enabled
-        localStorage.clear();
-        sessionStorage.clear();
-        clearAllCookies();
-        
-        // Clear any cached data
-        if ('caches' in window) {
-          caches.keys().then(names => {
-            names.forEach(name => {
-              caches.delete(name);
-            });
-          });
-        }
-        
-        console.log('🧹 FORCE CLEAR: All storage cleared by admin request');
-        return;
-      }
-
-      // Normal clearing: Clear localStorage completely
+      // Clear localStorage completely
       localStorage.clear();
       
       // Clear sessionStorage completely
       sessionStorage.clear();
       
-      // Clear all cookies (this is more complex due to security restrictions)
+      // Clear all cookies
       clearAllCookies();
       
       // Clear any cached data
@@ -54,10 +35,28 @@ export default function StorageCleaner() {
           names.forEach(name => {
             caches.delete(name);
           });
+        }).catch(error => {
+          console.warn('Could not clear caches:', error);
         });
       }
 
-      console.log('🧹 All storage cleared for fresh experience');
+      // Clear IndexedDB if available (more thorough clearing)
+      if ('indexedDB' in window) {
+        try {
+          // Clear common IndexedDB databases that might exist
+          const commonDBNames = ['localforage', 'keyval-store', 'exam-data', 'user-data'];
+          commonDBNames.forEach(dbName => {
+            const deleteReq = indexedDB.deleteDatabase(dbName);
+            deleteReq.onerror = () => {
+              // Silently handle errors - database might not exist
+            };
+          });
+        } catch (error) {
+          // Silently handle IndexedDB errors
+        }
+      }
+
+      console.log('🧹 AUTOMATIC: All student storage cleared for fresh experience');
     } catch (error) {
       // Silently handle any storage errors (e.g., in private browsing)
       console.warn('Could not clear storage:', error);
