@@ -116,8 +116,6 @@ export default function RootLayout({
       <body
         className={`${appSans.variable} antialiased font-sans`}
         style={{ 
-          minHeight: '100vh',
-          minHeight: '100svh',
           WebkitTextSizeAdjust: '100%',
           textSizeAdjust: '100%',
           WebkitTapHighlightColor: 'transparent'
