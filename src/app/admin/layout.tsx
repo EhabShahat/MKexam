@@ -74,11 +74,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     
                     {/* Admin Group */}
                     <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
-                      <NavLink href="/admin/blocked-entries">
+                      <NavLink href="/admin/eg">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
                         </svg>
-                        Blocked
+                        🥚 EG
                       </NavLink>
                       <NavLink href="/admin/audit">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,11 +171,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </MobileNavLink>
                   
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pt-4 pb-1 border-t border-gray-100 mt-3">Admin</h3>
-                  <MobileNavLink href="/admin/blocked-entries">
+                  <MobileNavLink href="/admin/eg">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
                     </svg>
-                    Blocked Entries
+                    🥚 Easter Egg
                   </MobileNavLink>
                   <MobileNavLink href="/admin/audit">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

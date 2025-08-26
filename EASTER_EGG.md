@@ -2,13 +2,13 @@
 
 ## Secret Feature: Blocked Entries Management
 
-This is a hidden admin feature accessible at `/eg` that allows super admins to block exam attempts by student name, IP address, or mobile number.
+This is a special admin feature accessible at `/admin/eg` that combines the fun easter egg theme with powerful blocking capabilities for student names, IP addresses, and mobile numbers.
 
 ### 🔐 Access
 
-1. Navigate to `/eg` in your browser
-2. Enter the password: `easteregg2024` or `admin123`
-3. Access the secret admin panel
+1. Log in to the admin panel at `/admin/login`
+2. Navigate to `/admin/eg` (available in the admin navigation as "🥚 EG")
+3. Enjoy the easter egg themed interface with full admin powers!
 
 ### 🚫 Features
 
@@ -53,9 +53,9 @@ When a student tries to access an exam:
 - Real-time updates when adding/removing blocks
 - Loading states and error handling
 
-### 🤫 Keep It Secret!
+### 🤫 Keep It Special!
 
-This is an easter egg feature - it's not meant to be discovered by regular users. Only share the `/eg` URL and password with trusted super admins.
+This is an easter egg themed admin feature - it combines the fun of easter eggs with serious admin functionality. Only authenticated admins can access `/admin/eg`.
 
 ### 📝 Example Use Cases
 
@@ -65,15 +65,14 @@ This is an easter egg feature - it's not meant to be discovered by regular users
 - Prevent cheating attempts from known sources
 - Emergency access control during exam issues
 
-### 🔧 Customization
+### 🔧 Features
 
-You can customize the password by editing the `handleAuth` function in `/src/app/eg/page.tsx`:
-
-```typescript
-if (password === "your-custom-password") {
-  setAuthenticated(true);
-}
-```
+The new `/admin/eg` page includes:
+- 🎨 Beautiful easter egg themed design with gradients and emojis
+- 📱 Full mobile number blocking support
+- 🔒 Proper admin authentication (no separate passwords needed)
+- ✨ Enhanced UI with animations and hover effects
+- 🎯 All the same blocking powers as the main admin tools
 
 ### 🎉 Fun Facts
 
