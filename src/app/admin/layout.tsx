@@ -12,16 +12,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Bypass guard and header for the login route so the login page can render
   if (pathname === "/admin/login") {
-    return (
-      <ToastProvider>
-        {children}
-      </ToastProvider>
-    );
+    return children;
   }
 
   return (
     <AdminGuard>
-      <ToastProvider>
         <a href="#main-content" className="skip-link">Skip to content</a>
         <div className="min-h-screen bg-gray-50">
           <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
@@ -191,7 +186,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">{children}</div>
           </main>
         </div>
-      </ToastProvider>
     </AdminGuard>
   );
 }

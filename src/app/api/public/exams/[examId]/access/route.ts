@@ -16,6 +16,44 @@ export async function POST(
     const ip = getClientIp(hdrs);
 
     const supabase = supabaseServer();
+
+    // Check if IP or student name is blocked (Easter Egg feature)
+    const blockedChecks = [];
+    if (ip) {
+      blockedChecks.push(
+        supabase
+          .from("blocked_entries")
+          .select("value, reason")
+          .eq("type", "ip")
+          .eq("value", ip)
+          .single()
+      );
+    }
+    if (studentName) {
+      blockedChecks.push(
+        supabase
+          .from("blocked_entries")
+          .select("value, reason")
+          .eq("type", "name")
+          .ilike("value", studentName.trim())
+          .single()
+      );
+    }
+
+    if (blockedChecks.length > 0) {
+      const results = await Promise.all(blockedChecks);
+      const blocked = results.find(result => result.data && !result.error);
+      
+      if (blocked?.data) {
+        return NextResponse.json(
+          { 
+            error: "access_denied",
+            message: blocked.data.reason || "Access has been restricted for this entry."
+          },
+          { status: 403 }
+        );
+      }
+    }
     const { data, error } = await supabase.rpc("start_attempt_v2", {
       p_exam_id: examId,
       p_code: code,

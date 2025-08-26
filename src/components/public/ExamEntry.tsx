@@ -138,6 +138,9 @@ export default function ExamEntry({
           case "exam_not_started":
             setError(t(locale, "err_exam_not_started"));
             break;
+          case "access_denied":
+            setError(data?.message || "Access has been restricted for this entry.");
+            break;
           case "exam_ended":
             setError(t(locale, "err_exam_ended"));
             break;
