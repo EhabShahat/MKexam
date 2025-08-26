@@ -267,7 +267,6 @@ export default function AdminResultsIndex() {
               variant="danger" 
               size="sm"
               onClick={() => setDeleteConfirm(attempt.id)}
-              title="Delete Attempt"
             >
               Delete
             </ActionButton>

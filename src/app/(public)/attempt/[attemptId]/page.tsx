@@ -70,7 +70,6 @@ export default function AttemptPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(200); // Dynamic header height
-  const [timeWarning, setTimeWarning] = useState<string | null>(null);
   const { locale, dir } = useStudentLocale();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);

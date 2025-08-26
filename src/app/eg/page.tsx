@@ -22,7 +22,7 @@ export default function EasterEggPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
 
-  // Move hooks to top level to avoid conditional hook calls
+  // ALL HOOKS MUST BE AT THE TOP LEVEL - NO CONDITIONAL HOOKS!
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -37,6 +37,50 @@ export default function EasterEggPage() {
     enabled: authenticated, // Only run query when authenticated
   });
 
+  // Add blocked entry mutation - MUST BE AT TOP LEVEL
+  const addMutation = useMutation({
+    mutationFn: async (data: { type: "name" | "ip"; value: string; reason?: string }) => {
+      const response = await authFetch("/api/admin/blocked-entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add blocked entry");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blocked-entries"] });
+      setNewValue("");
+      setNewReason("");
+      setShowForm(false);
+      toast.success({ title: "Success", message: "Entry blocked successfully" });
+    },
+    onError: (error: Error) => {
+      toast.error({ title: "Error", message: error.message });
+    },
+  });
+
+  // Remove blocked entry mutation - MUST BE AT TOP LEVEL
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await authFetch(`/api/admin/blocked-entries/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to remove blocked entry");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["blocked-entries"] });
+      toast.success({ title: "Success", message: "Entry unblocked successfully" });
+    },
+    onError: (error: Error) => {
+      toast.error({ title: "Error", message: error.message });
+    },
+  });
+
   // Simple password protection (not super secure, but adds a layer)
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +92,18 @@ export default function EasterEggPage() {
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newValue.trim()) return;
+    
+    addMutation.mutate({
+      type: newType,
+      value: newValue.trim(),
+      reason: newReason.trim() || undefined,
+    });
+  };
+
+  // Conditional rendering - but all hooks are already called above
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -84,61 +140,6 @@ export default function EasterEggPage() {
       </div>
     );
   }
-
-  // Add blocked entry mutation
-  const addMutation = useMutation({
-    mutationFn: async (data: { type: "name" | "ip"; value: string; reason?: string }) => {
-      const response = await authFetch("/api/admin/blocked-entries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to add blocked entry");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["blocked-entries"] });
-      setNewValue("");
-      setNewReason("");
-      setShowForm(false);
-      toast.success({ title: "Success", message: "Entry blocked successfully" });
-    },
-    onError: (error: Error) => {
-      toast.error({ title: "Error", message: error.message });
-    },
-  });
-
-  // Remove blocked entry mutation
-  const removeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await authFetch(`/api/admin/blocked-entries/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to remove blocked entry");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["blocked-entries"] });
-      toast.success({ title: "Success", message: "Entry unblocked successfully" });
-    },
-    onError: (error: Error) => {
-      toast.error({ title: "Error", message: error.message });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newValue.trim()) return;
-    
-    addMutation.mutate({
-      type: newType,
-      value: newValue.trim(),
-      reason: newReason.trim() || undefined,
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
-import { logAdminAction } from "@/lib/audit";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin";
+import { auditLog } from "@/lib/audit";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAdmin();
-    const supabase = createClient();
+    await requireAdmin(request);
+    const supabase = supabaseServer();
 
     const { data, error } = await supabase
       .from("blocked_entries")
@@ -33,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(request);
     const { type, value, reason } = await request.json();
 
     if (!type || !value) {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer();
 
     // Check if entry already exists
     const { data: existing } = await supabase
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         type,
         value: value.trim(),
         reason: reason?.trim() || null,
-        created_by: admin.email || admin.id,
+        created_by: admin.email || admin.user_id,
       })
       .select()
       .single();
@@ -88,16 +88,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the admin action
-    await logAdminAction({
-      admin_id: admin.id,
-      action: "block_entry",
+    await auditLog(admin.user_id, "block_entry", {
       resource_type: "blocked_entry",
       resource_id: data.id,
-      details: {
-        type,
-        value: value.trim(),
-        reason: reason?.trim(),
-      },
+      type,
+      value: value.trim(),
+      reason: reason?.trim(),
     });
 
     return NextResponse.json(data);

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
-import { logAdminAction } from "@/lib/audit";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin";
+import { auditLog } from "@/lib/audit";
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { attemptId: string } }
+  { params }: { params: Promise<{ attemptId: string }> }
 ) {
   try {
-    const admin = await requireAdmin();
-    const { attemptId } = params;
+    const admin = await requireAdmin(request);
+    const { attemptId } = await params;
 
     if (!attemptId) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function DELETE(
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer();
 
     // First, get the attempt details for logging
     const { data: attempt, error: fetchError } = await supabase
@@ -54,16 +54,12 @@ export async function DELETE(
     }
 
     // Log the admin action
-    await logAdminAction({
-      admin_id: admin.id,
-      action: "delete_attempt",
+    await auditLog(admin.user_id, "delete_attempt", {
       resource_type: "attempt",
       resource_id: attemptId,
-      details: {
-        student_name: attempt.student_name,
-        student_email: attempt.student_email,
-        exam_title: (attempt.exam as any)?.title,
-      },
+      student_name: attempt.student_name,
+      student_email: attempt.student_email,
+      exam_title: (attempt.exam as any)?.title,
     });
 
     return NextResponse.json({ success: true });

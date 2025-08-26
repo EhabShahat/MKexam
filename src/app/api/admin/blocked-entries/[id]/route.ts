@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth";
-import { logAdminAction } from "@/lib/audit";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin";
+import { auditLog } from "@/lib/audit";
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await requireAdmin();
-    const { id } = params;
+    const admin = await requireAdmin(request);
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function DELETE(
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseServer();
 
     // Get entry details for logging
     const { data: entry, error: fetchError } = await supabase
@@ -49,16 +49,12 @@ export async function DELETE(
     }
 
     // Log the admin action
-    await logAdminAction({
-      admin_id: admin.id,
-      action: "unblock_entry",
+    await auditLog(admin.user_id, "unblock_entry", {
       resource_type: "blocked_entry",
       resource_id: id,
-      details: {
-        type: entry.type,
-        value: entry.value,
-        reason: entry.reason,
-      },
+      type: entry.type,
+      value: entry.value,
+      reason: entry.reason,
     });
 
     return NextResponse.json({ success: true });
