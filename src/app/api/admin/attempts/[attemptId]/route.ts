@@ -23,7 +23,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("exam_attempts")
       .select(
-        "id, student_name, ip_address, completion_status, started_at, submitted_at, students(student_name)"
+        "id, student_name, ip_address, completion_status, started_at, submitted_at, device_info, students(student_name)"
       )
       .eq("id", attemptId)
       .maybeSingle();
@@ -43,6 +43,7 @@ export async function GET(
       started_at: (data as any).started_at ?? null,
       submitted_at: (data as any).submitted_at ?? null,
       ip_address: (data as any).ip_address ?? null,
+      device_info: (data as any).device_info ?? null,
       // Placeholder for IP history; UI will handle empty array gracefully
       ips: [] as Array<{ created_at: string; ip_address: string }>,
     };

@@ -12,6 +12,7 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const code: string | null = body?.code ?? null;
     const studentName: string | null = body?.studentName ?? null;
+    const deviceInfo: any | null = body?.deviceInfo ?? null;
     const hdrs = await headers();
     const ip = getClientIp(hdrs);
 
@@ -92,6 +93,18 @@ export async function POST(
     const attemptId: string | undefined = row?.attempt_id;
     if (!attemptId) {
       return NextResponse.json({ error: "no_attempt" }, { status: 400 });
+    }
+
+    // Best-effort: store device metadata if provided
+    if (deviceInfo && typeof deviceInfo === "object") {
+      try {
+        await supabase
+          .from("exam_attempts")
+          .update({ device_info: deviceInfo })
+          .eq("id", attemptId);
+      } catch (e) {
+        console.warn("device_info update failed", e);
+      }
     }
 
     // Get student name for the response (reuse studentData if already fetched)

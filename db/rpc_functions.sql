@@ -5,6 +5,52 @@
 -- Ensure pgcrypto for gen_random_uuid/gen_random_bytes
 create extension if not exists pgcrypto;
 
+-- Ensure exam_attempts has device_info column (idempotent)
+alter table if exists public.exam_attempts add column if not exists device_info jsonb;
+
+-- Attempt activity events table (idempotent)
+create table if not exists public.attempt_activity_events (
+  id uuid primary key default gen_random_uuid(),
+  attempt_id uuid not null references public.exam_attempts(id) on delete cascade,
+  event_type text not null,
+  event_time timestamptz not null default now(),
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Helpful indexes for querying
+create index if not exists idx_activity_attempt_time on public.attempt_activity_events (attempt_id, event_time desc);
+create index if not exists idx_activity_event_type on public.attempt_activity_events (event_type);
+
+-- Batch log attempt activity events
+CREATE OR REPLACE FUNCTION public.log_attempt_activity(p_attempt_id uuid, p_events jsonb)
+RETURNS TABLE(inserted_count integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO public, extensions
+AS $function$
+DECLARE
+  v_count integer := 0;
+BEGIN
+  IF p_attempt_id IS NULL THEN
+    RAISE EXCEPTION 'invalid_attempt_id';
+  END IF;
+
+  INSERT INTO public.attempt_activity_events (attempt_id, event_type, event_time, payload)
+  SELECT
+    p_attempt_id,
+    left(coalesce(e->>'event_type', 'unknown'), 64),
+    COALESCE((e->>'event_time')::timestamptz, now()),
+    COALESCE(e->'payload', '{}'::jsonb)
+  FROM jsonb_array_elements(COALESCE(p_events, '[]'::jsonb)) AS e;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  RETURN QUERY SELECT v_count;
+END;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.log_attempt_activity(uuid, jsonb) TO service_role;
+
 -- Execute arbitrary SQL passed from the server (service role only)
 -- Splits by semicolons and executes each non-empty, non-comment statement.
 CREATE OR REPLACE FUNCTION public.exec_sql(sql text)
