@@ -991,7 +991,8 @@ export default function AttemptPage() {
             padding: '1.5rem',
             maxWidth: '460px',
             width: '100%',
-            border: '1px solid var(--border)'
+            border: '1px solid var(--border)',
+            textAlign: 'center'
           }}>
             <h3 id="submitConfirmTitle" style={{ 
               fontSize: '1.125rem', 
@@ -1006,7 +1007,9 @@ export default function AttemptPage() {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
               gap: '0.75rem',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              textAlign: 'center',
+              justifyItems: 'center'
             }}>
               <div style={{
                 backgroundColor: 'var(--muted)',
@@ -1058,7 +1061,8 @@ export default function AttemptPage() {
               color: '#9a3412',
               borderRadius: '0.375rem',
               padding: '0.75rem',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              textAlign: 'center'
             }}>
               <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{t(locale, 'warning')}</div>
               <div style={{ lineHeight: 1.5 }}>
@@ -1072,7 +1076,7 @@ export default function AttemptPage() {
             <div style={{ 
               display: 'flex', 
               gap: '0.75rem', 
-              justifyContent: 'flex-end'
+              justifyContent: 'center'
             }}>
               <button 
                 className="btn btn-outline"
