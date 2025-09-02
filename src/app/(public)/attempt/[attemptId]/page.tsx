@@ -506,6 +506,7 @@ export default function AttemptPage() {
 
   const disabled = state.completion_status === "submitted";
   const progressPercentage = total ? Math.round((answered / total) * 100) : 0;
+  const unansweredCount = Math.max(0, total - answered);
 
   return (
     <div dir={dir} lang={locale} style={{ 
@@ -959,43 +960,115 @@ export default function AttemptPage() {
 
       {/* Submit Confirmation Modal */}
       {showSubmitConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 50,
-          padding: '1rem'
-        }}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="submitConfirmTitle"
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !submitting) setShowSubmitConfirm(false);
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !submitting) setShowSubmitConfirm(false);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: '1rem'
+          }}
+        >
           <div style={{
             backgroundColor: 'var(--card)',
             borderRadius: '0.5rem',
             padding: '1.5rem',
-            maxWidth: '400px',
+            maxWidth: '460px',
             width: '100%',
             border: '1px solid var(--border)'
           }}>
-            <h3 style={{ 
+            <h3 id="submitConfirmTitle" style={{ 
               fontSize: '1.125rem', 
               fontWeight: '600', 
-              marginBottom: '1rem',
               margin: '0 0 1rem 0'
             }}>
-              {t(locale, 'confirm_submission')}
+              {t(locale, 'submit_exam_q')}
             </h3>
-            <p style={{ 
-              color: 'var(--muted-foreground)', 
-              marginBottom: '1.5rem',
-              lineHeight: '1.5',
-              margin: '0 0 1.5rem 0'
+
+            {/* Summary */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '0.75rem',
+              marginBottom: '1rem'
             }}>
-              {t(locale, 'submit_warning')}
-            </p>
+              <div style={{
+                backgroundColor: 'var(--muted)',
+                padding: '0.75rem',
+                borderRadius: '0.375rem'
+              }}>
+                <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>{t(locale, 'total_questions')}</div>
+                <div style={{ fontWeight: 600 }}>{total}</div>
+              </div>
+              <div style={{
+                backgroundColor: '#f0fdf4',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #dcfce7'
+              }}>
+                <div style={{ color: '#16a34a', fontSize: '0.75rem' }}>{t(locale, 'answered_label')}</div>
+                <div style={{ fontWeight: 600, color: '#166534' }}>{answered}</div>
+              </div>
+              <div style={{
+                backgroundColor: '#fef2f2',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #fee2e2'
+              }}>
+                <div style={{ color: '#dc2626', fontSize: '0.75rem' }}>{t(locale, 'unanswered_label')}</div>
+                <div style={{ fontWeight: 600, color: '#991b1b' }}>{unansweredCount}</div>
+              </div>
+              <div style={{
+                backgroundColor: 'var(--muted)',
+                padding: '0.75rem',
+                borderRadius: '0.375rem'
+              }}>
+                <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>{t(locale, 'progress_label')}</div>
+                <div style={{ fontWeight: 600 }}>{progressPercentage}%</div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ height: '8px', background: 'var(--muted)', borderRadius: '9999px' }}>
+                <div style={{ height: '8px', width: `${progressPercentage}%`, background: '#2563eb', borderRadius: '9999px', transition: 'width 0.2s ease' }} />
+              </div>
+            </div>
+
+            {/* Warning */}
+            <div style={{ 
+              backgroundColor: '#fff7ed',
+              border: '1px solid #ffedd5',
+              color: '#9a3412',
+              borderRadius: '0.375rem',
+              padding: '0.75rem',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{t(locale, 'warning')}</div>
+              <div style={{ lineHeight: 1.5 }}>
+                <div>{t(locale, 'cannot_be_undone')}</div>
+                {unansweredCount > 0 && (
+                  <div>{t(locale, 'unanswered_warning', { count: unansweredCount })}</div>
+                )}
+              </div>
+            </div>
+
             <div style={{ 
               display: 'flex', 
               gap: '0.75rem', 
@@ -1016,7 +1089,7 @@ export default function AttemptPage() {
                 }}
                 disabled={submitting}
               >
-                {t(locale, 'yes_submit')}
+                {t(locale, 'confirm_submit_exam')}
               </button>
             </div>
           </div>

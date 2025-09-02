@@ -231,10 +231,10 @@ export default function AdminResultsIndex() {
       case "student":
         return attempt.student_name || <span className="text-gray-400">Anonymous</span>;
       case "status":
-        const status = attempt.completion_status || "incomplete";
+        const status = (attempt.completion_status ?? "in_progress") as "in_progress" | "submitted" | "abandoned" | "invalid";
         return (
           <StatusBadge 
-            status={status === "completed" ? "used" : "unused"} 
+            status={status}
             size="sm" 
           />
         );

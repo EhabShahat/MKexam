@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import { useParams } from "next/navigation";
+import StatusBadge from "@/components/admin/StatusBadge";
 
 export default function AdminAttemptDetails() {
   const { attemptId } = useParams<{ attemptId: string }>();
@@ -58,7 +59,13 @@ export default function AdminAttemptDetails() {
           <h2 className="font-semibold mb-2">Summary</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
             <div><span className="text-gray-600">Student:</span> {metaQ.data.student_name ?? "-"}</div>
-            <div><span className="text-gray-600">Status:</span> {metaQ.data.completion_status ?? "-"}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600">Status:</span>
+              {(() => {
+                const status = (metaQ.data.completion_status ?? "in_progress") as "in_progress" | "submitted" | "abandoned" | "invalid";
+                return <StatusBadge status={status} size="sm" />;
+              })()}
+            </div>
             <div><span className="text-gray-600">Started:</span> {metaQ.data.started_at ?? "-"}</div>
             <div><span className="text-gray-600">Submitted:</span> {metaQ.data.submitted_at ?? "-"}</div>
             <div><span className="text-gray-600">Latest IP:</span> {metaQ.data.ip_address ?? "-"}</div>

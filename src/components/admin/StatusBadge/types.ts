@@ -1,4 +1,17 @@
-export type StatusType = "draft" | "published" | "archived" | "active" | "inactive" | "used" | "unused";
+export type StatusType = 
+  "draft" | 
+  "published" | 
+  "archived" | 
+  "active" | 
+  "inactive" | 
+  "used" | 
+  "unused" | 
+  "in_progress" | 
+  "submitted" | 
+  "abandoned" | 
+  "invalid" | 
+  "unknown";
+
 export type BadgeSize = "sm" | "md";
 
 export interface StatusBadgeProps {

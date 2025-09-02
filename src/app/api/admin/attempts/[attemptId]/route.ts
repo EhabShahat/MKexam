@@ -79,6 +79,8 @@ export async function DELETE(
       .from("exam_attempts")
       .select(`
         id,
+        exam_id,
+        student_id,
         student_name,
         exam:exams(title)
       `)
@@ -90,6 +92,18 @@ export async function DELETE(
         { error: "Attempt not found" },
         { status: 404 }
       );
+    }
+
+    // Best-effort: remove gating row tied to this attempt_id before deleting the attempt.
+    // This covers legacy attempts where exam_attempts.student_id may be null.
+    {
+      const { error: preDelGatingErr } = await supabase
+        .from("student_exam_attempts")
+        .delete()
+        .eq("attempt_id", attemptId);
+      if (preDelGatingErr) {
+        console.error("Pre-delete gating removal failed:", preDelGatingErr);
+      }
     }
 
     // Delete the attempt (this will cascade to related records)
@@ -104,6 +118,42 @@ export async function DELETE(
         { error: "Failed to delete attempt" },
         { status: 500 }
       );
+    }
+
+    // If this attempt belonged to a student (code-based access), reset per-exam gating
+    if ((attempt as any).student_id && (attempt as any).exam_id) {
+      const studentId = (attempt as any).student_id as string;
+      const examId = (attempt as any).exam_id as string;
+
+      const { data: resetRows, error: resetError } = await supabase.rpc(
+        "admin_reset_student_attempts",
+        {
+          p_student_id: studentId,
+          p_exam_id: examId,
+        }
+      );
+
+      const deletedCount = Array.isArray(resetRows)
+        ? Number((resetRows[0] as any)?.deleted_count ?? 0)
+        : 0;
+
+      if (resetError || deletedCount === 0) {
+        if (resetError) {
+          console.warn("admin_reset_student_attempts error:", resetError);
+        } else {
+          console.log("admin_reset_student_attempts: no rows deleted (likely pre-delete removal handled it)");
+        }
+        // Fallback: attempt direct delete in case RPC is missing or not applied
+        const { error: directDelErr } = await supabase
+          .from("student_exam_attempts")
+          .delete()
+          .match({ student_id: studentId, exam_id: examId });
+        if (directDelErr) {
+          console.error("Direct gating reset failed:", directDelErr);
+        }
+      } else {
+        console.log("Gating reset via RPC, deleted_count=", deletedCount);
+      }
     }
 
     // Log the admin action

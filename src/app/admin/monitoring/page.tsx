@@ -297,10 +297,10 @@ export default function AdminMonitoringPage() {
               case "submitted":
                 return new Date(item.submitted_at).toLocaleString();
               case "status":
-                const status = item.completion_status || "completed";
+                const status = (item.completion_status ?? "in_progress") as "in_progress" | "submitted" | "abandoned" | "invalid";
                 return (
                   <StatusBadge 
-                    status={status === "completed" ? "used" : "unused"} 
+                    status={status} 
                     size="sm" 
                   />
                 );
