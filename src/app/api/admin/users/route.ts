@@ -55,6 +55,22 @@ export async function POST(req: NextRequest) {
 
     console.log("[API] /api/admin/users - success", { created_user_id: item?.user_id || null });
 
+    // Ensure admin_users row exists when is_admin is requested
+    if (is_admin && item?.user_id) {
+      try {
+        const ensure = await svc
+          .from("admin_users")
+          .upsert({ user_id: item.user_id, email: item?.email ?? null }, { onConflict: "user_id" });
+        if (ensure.error) {
+          console.error("[API] /api/admin/users - ensure admin_users upsert error", ensure.error);
+        } else {
+          console.log("[API] /api/admin/users - ensured admin_users entry", { user_id: item.user_id });
+        }
+      } catch (e) {
+        console.error("[API] /api/admin/users - ensure admin_users unexpected error", e);
+      }
+    }
+
     try {
       await auditLog(actor.username || actor.email || actor.user_id, "admin_create_user", {
         username: username || null,
