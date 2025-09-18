@@ -100,6 +100,7 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     no_results_found: "No results found.",
     pass: "PASS",
     fail: "FAIL",
+    additional_scoring: "Additional Scoring",
     // Attempt page & question component additions
     no_attempt_found: "No exam attempt found.",
     question_of_total: "Question {current} of {total}",
@@ -246,6 +247,7 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     no_results_found: "لم يتم العثور على نتائج.",
     pass: "ناجح",
     fail: "راسب",
+    additional_scoring: "درجات الإضافية",
     // Attempt page & question component additions
     no_attempt_found: "لم يتم العثور على محاولة للاختبار.",
     question_of_total: "السؤال {current} من {total}",

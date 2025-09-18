@@ -62,7 +62,9 @@ export async function summaryGET(request: NextRequest) {
       .filter((f) => f.hidden !== true)
       .map((f) => {
         let value = scoreData?.[f.key];
-        return { key: f.key, label: f.label, value };
+        const mp = (f as any)?.max_points ?? null;
+        const type = (f as any)?.type as "number" | "text" | "boolean" | undefined;
+        return { key: f.key, label: f.label, value, max_points: mp, type };
       });
 
     // Compute exam score for the student across published exams

@@ -24,6 +24,8 @@ interface ExtraItem {
   key: string;
   label: string;
   value: any;
+  max_points?: number | null;
+  type?: "number" | "text" | "boolean";
 }
 
 interface PassSummary {
@@ -64,7 +66,7 @@ export default function PublicResultsPage({
   const [showResults, setShowResults] = useState(false);
   const resultsRef = useRef<HTMLDivElement | null>(null);
   
-  
+  // Fetch app settings
   const router = useRouter();
   const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(initialSystemMode ?? null);
   const [disabledMessage, setDisabledMessage] = useState<string | null>(initialDisabledMessage ?? null);
@@ -152,6 +154,26 @@ export default function PublicResultsPage({
   const canSearch = isCodeMode
     ? (isValidCodeFormat && codeValidationQuery.data === true)
     : searchTerm.trim().length > 0;
+
+  // Format extras values for display
+  const formatExtraValue = (item: { value: any; max_points?: number | null; type?: 'number' | 'text' | 'boolean' }) => {
+    const v = item?.value as any;
+    if (v === null || v === undefined || v === '') return '-';
+    if (typeof v === 'boolean') {
+      return v ? t(locale, 'true') : t(locale, 'false');
+    }
+    const n = Number(v);
+    if (!Number.isNaN(n)) {
+      const rounded = Math.round(n * 10) / 10;
+      const max = item?.max_points;
+      if (typeof max === 'number' && max > 0) {
+        if (max === 100) return `${rounded}%`;
+        return `${rounded}/${max}`;
+      }
+      return `${rounded}`;
+    }
+    return String(v);
+  };
 
   // Fetch overall summary (extra scoring + overall pass/fail) when searching by code
   const summaryQuery = useQuery<SummaryResponse, Error>({
@@ -422,7 +444,7 @@ export default function PublicResultsPage({
           {isCodeMode && canSearch && (
             <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-lg">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-gray-900">Additional Scoring</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t(locale, 'additional_scoring')}</h3>
                 {summaryQuery.isFetching && (
                   <span className="text-sm text-gray-500">Loading…</span>
                 )}
@@ -436,7 +458,7 @@ export default function PublicResultsPage({
                       {(summaryQuery.data!.extras).map((item) => (
                         <li key={item.key} className="py-2 flex items-center justify-between">
                           <span className="text-gray-700">{item.label}</span>
-                          <span className="font-medium text-gray-900">{String(item.value ?? '-')}</span>
+                          <span className="font-medium text-gray-900">{formatExtraValue(item as any)}</span>
                         </li>)
                       )}
                     </ul>
