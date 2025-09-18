@@ -94,16 +94,48 @@ export async function extraScoresFieldsDELETE(req: NextRequest) {
     const key = url.searchParams.get("key")?.trim();
     if (!key) return NextResponse.json({ error: "key_required" }, { status: 400 });
     const svc = supabaseServer();
-    const { data, error } = await svc.rpc("admin_extra_scores_remove_key", { p_key: key });
-    if (error) throw error;
-    let updated = 0;
-    if (Array.isArray(data) && data.length > 0) {
-      const row = data[0] as any;
-      updated = Number(row?.updated_count ?? 0);
-    } else if (data && (data as any).updated_count != null) {
-      updated = Number((data as any).updated_count);
+    // Remove key from all students' extra_scores.data in chunks to satisfy PostgREST filter requirements
+    const pageSize = 500;
+    let from = 0;
+    let totalUpdated = 0;
+    while (true) {
+      const { data: rows, error: selErr } = await svc
+        .from("extra_scores")
+        .select("student_id,data")
+        .range(from, from + pageSize - 1);
+      if (selErr) throw selErr;
+      const arr = rows || [];
+      if (arr.length === 0) break;
+
+      const payload: Array<{ student_id: string; data: any; updated_at: string }> = [];
+      for (const r of arr) {
+        const sid = (r as any)?.student_id as string;
+        const dataObj = ((r as any)?.data || {}) as Record<string, any>;
+        if (Object.prototype.hasOwnProperty.call(dataObj, key)) {
+          const clone: Record<string, any> = { ...dataObj };
+          delete clone[key];
+          payload.push({ student_id: sid, data: clone, updated_at: new Date().toISOString() });
+        }
+      }
+      if (payload.length > 0) {
+        const { error: upErr } = await svc
+          .from("extra_scores")
+          .upsert(payload, { onConflict: "student_id", ignoreDuplicates: false });
+        if (upErr) throw upErr;
+        totalUpdated += payload.length;
+      }
+      if (arr.length < pageSize) break;
+      from += pageSize;
     }
-    return NextResponse.json({ ok: true, updated_count: updated });
+
+    // Delete the field definition itself
+    const { error: delErr } = await svc
+      .from("extra_score_fields")
+      .delete()
+      .eq("key", key);
+    if (delErr) throw delErr;
+
+    return NextResponse.json({ ok: true, updated_count: totalUpdated });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
