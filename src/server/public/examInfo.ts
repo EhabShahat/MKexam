@@ -8,7 +8,7 @@ export async function examInfoGET(examId: string) {
       .from("exams")
       .select("id, title, description, access_type, start_time, end_time, duration_minutes, status")
       .eq("id", examId)
-      .eq("status", "published")
+      .eq("status", "done")
       .single();
 
     if (error || !data) {

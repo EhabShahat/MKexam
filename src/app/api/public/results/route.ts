@@ -37,37 +37,35 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query joining necessary data. Only include attempts that have results.
-    // Extra guard: if code mode but input isn't 4 digits, short-circuit with empty list
+    // Validate code format via settings for code mode
     if (mode === "code") {
       const trimmed = searchTerm.trim();
-      if (!/^\d{4}$/.test(trimmed)) {
-        console.log("Code mode but non-4-digit input; returning empty");
-        return NextResponse.json({ items: [] });
-      }
+      const { data: cs } = await svc.from('app_settings').select('code_format, code_length, code_pattern').limit(1).maybeSingle();
+      const format = (cs as any) || {};
+      const length = Number(format.code_length ?? 4);
+      if (trimmed.length !== length) return NextResponse.json({ items: [] });
     }
 
-    let query;
+    let query: any;
     if (mode === "name") {
-      // Name mode via global students joined through exam_attempts.student_id
       query = svc
         .from("exam_attempts")
         .select(
           `id, exam_id, completion_status, submitted_at,
            exams(title, settings),
            students(student_name, code),
-           exam_results!inner(score_percentage)`
+           exam_results!inner(score_percentage, final_score_percentage)`
         )
         .order("submitted_at", { ascending: false })
         .ilike("students.student_name", `%${searchTerm}%`);
     } else {
-      // Code mode using global students through student_exam_attempts
       const code = searchTerm.trim();
       query = svc
         .from("exam_attempts")
         .select(
           `id, exam_id, completion_status, submitted_at,
            exams(title, settings),
-           exam_results!inner(score_percentage),
+           exam_results!inner(score_percentage, final_score_percentage),
            student_exam_attempts!inner(
              students!inner(student_name, code)
            )`
@@ -76,63 +74,169 @@ export async function GET(request: NextRequest) {
         .eq("student_exam_attempts.students.code", code);
     }
 
-    console.log(`Executing query with mode: ${mode}, searchTerm: ${searchTerm}`);
     const { data, error } = await query;
     if (error) {
-      console.error("Error fetching filtered results:", error);
-      
-      // Check for specific error types and provide appropriate responses
-      if (error.code === "42P01") { // Table doesn't exist
-        console.log("Table doesn't exist, returning empty results");
+      if (error.code === "42P01") {
         return NextResponse.json({ items: [], message: "No results available" });
-      } else if (error.code === "42703") { // Column doesn't exist
-        console.log("Column error, returning empty results");
+      } else if (error.code === "42703") {
         return NextResponse.json({ items: [], message: "Search is temporarily unavailable" });
       }
-      
       return NextResponse.json({ error: "Failed to fetch exam results" }, { status: 500 });
     }
-    
-    console.log(`Query returned ${data?.length || 0} results`);
 
-    const items = (data || []).map((row: any) => {
-      // derive student info depending on mode and join shape (object vs array)
-      let student_name = "Anonymous";
-      let student_code = "";
-      if (mode === "code") {
-        const sea = row.student_exam_attempts;
-        const seaObj = Array.isArray(sea) ? sea[0] : sea;
-        const stu = seaObj?.students;
-        const stuObj = Array.isArray(stu) ? stu[0] : stu;
-        student_name = stuObj?.student_name || student_name;
-        student_code = stuObj?.code || student_code;
-      } else {
-        const stu = row.students;
-        const stuObj = Array.isArray(stu) ? stu[0] : stu;
-        student_name = stuObj?.student_name || student_name;
-        student_code = stuObj?.code || student_code;
+    // Determine exam score source (final/raw) for display
+    let examScoreSource: 'final' | 'raw' = 'final';
+    try {
+      const { data: s } = await svc.from('app_settings').select('result_exam_score_source').limit(1).maybeSingle();
+      const src = (s as any)?.result_exam_score_source as string | undefined;
+      if (src === 'raw' || src === 'final') examScoreSource = src;
+    } catch {}
+
+    let items: any[] = [];
+    if (mode === 'code') {
+      // Include all published exams and add zero rows for missed exams
+      const { data: allExams, error: exErr } = await svc
+        .from('exams')
+        .select('id, title, settings')
+        .eq('status', 'done');
+      if (exErr && (exErr as any).code !== 'PGRST116') {
+        return NextResponse.json({ error: exErr.message }, { status: 500 });
       }
-      // compute pass/fail based on exam.settings.pass_percentage
-      const rawScore = row.exam_results?.score_percentage;
-      const score_percentage = rawScore === null || rawScore === undefined ? null : Number(rawScore);
-      const passThresholdRaw = row.exams?.settings?.pass_percentage;
-      const pass_threshold = passThresholdRaw === null || passThresholdRaw === undefined ? null : Number(passThresholdRaw);
-      const is_pass = (typeof score_percentage === 'number' && !Number.isNaN(score_percentage) && typeof pass_threshold === 'number' && !Number.isNaN(pass_threshold))
-        ? score_percentage >= pass_threshold
-        : null;
-      return {
-        id: row.id,
-        exam_id: row.exam_id,
-        exam_title: row.exams?.title || "Unknown Exam",
-        student_name,
-        student_code,
-        completion_status: row.completion_status,
-        submitted_at: row.submitted_at,
-        score_percentage,
-        pass_threshold,
-        is_pass,
-      };
-    });
+      const examsList = (allExams || []) as any[];
+      const configMap = new Map<string, { hidden?: boolean; include_in_pass?: boolean; order_index?: number | null }>();
+      if (examsList.length > 0) {
+        const { data: cfg } = await svc
+          .from('exam_public_config')
+          .select('exam_id, hidden, include_in_pass, order_index')
+          .in('exam_id', examsList.map((e) => e.id));
+        (cfg || []).forEach((c: any) => configMap.set(c.exam_id, {
+          hidden: c.hidden === true,
+          include_in_pass: c.include_in_pass !== false,
+          order_index: c.order_index ?? null,
+        }));
+      }
+      const latestByExam = new Map<string, any>();
+      for (const row of (data || [])) {
+        if (!latestByExam.has(row.exam_id)) latestByExam.set(row.exam_id, row);
+      }
+      for (const ex of examsList) {
+        const cfg = configMap.get(ex.id) || {} as any;
+        if (cfg.hidden === true) continue;
+        const row = latestByExam.get(ex.id);
+        let student_name = 'Anonymous';
+        let student_code = '';
+        let submitted_at: string | null = null;
+        let completion_status: string | null = null;
+        let n: number | null = null;
+        if (row) {
+          const sea = row.student_exam_attempts;
+          const seaObj = Array.isArray(sea) ? sea[0] : sea;
+          const stu = seaObj?.students;
+          const stuObj = Array.isArray(stu) ? stu[0] : stu;
+          student_name = stuObj?.student_name || student_name;
+          student_code = stuObj?.code || student_code;
+          const er = Array.isArray(row.exam_results) ? row.exam_results[0] : row.exam_results;
+          if (examScoreSource === 'final') {
+            const f = er?.final_score_percentage;
+            if (f != null && !Number.isNaN(Number(f))) n = Number(f);
+            else if (er?.score_percentage != null && !Number.isNaN(Number(er.score_percentage))) n = Number(er.score_percentage);
+          } else if (er?.score_percentage != null && !Number.isNaN(Number(er.score_percentage))) {
+            n = Number(er.score_percentage);
+          }
+          submitted_at = row.submitted_at ?? null;
+          completion_status = row.completion_status ?? null;
+        } else {
+          n = 0; // no attempt -> zero score
+        }
+        const passThresholdRaw = ex?.settings?.pass_percentage;
+        const pass_threshold = passThresholdRaw == null ? null : Number(passThresholdRaw);
+        const score_percentage = n;
+        const is_pass = (typeof score_percentage === 'number' && !Number.isNaN(score_percentage) && typeof pass_threshold === 'number' && !Number.isNaN(pass_threshold))
+          ? score_percentage >= pass_threshold
+          : null;
+        items.push({
+          id: row?.id ?? `${ex.id}-na`,
+          exam_id: ex.id,
+          exam_title: ex.title || 'Unknown Exam',
+          student_name,
+          student_code,
+          completion_status,
+          submitted_at,
+          score_percentage,
+          pass_threshold,
+          is_pass,
+          _order_index: (cfg as any).order_index ?? null,
+        });
+      }
+      items = items.sort((a: any, b: any) => {
+        const ao = a._order_index ?? 999999;
+        const bo = b._order_index ?? 999999;
+        if (ao !== bo) return ao - bo;
+        const as = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+        const bs = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+        return bs - as;
+      });
+    } else {
+      // name mode (unchanged behavior)
+      const examIds = Array.from(new Set((data || []).map((r: any) => r.exam_id))).filter(Boolean);
+      const configMap = new Map<string, { hidden?: boolean; include_in_pass?: boolean; order_index?: number | null }>();
+      if (examIds.length > 0) {
+        const { data: cfg } = await svc
+          .from('exam_public_config')
+          .select('exam_id, hidden, include_in_pass, order_index')
+          .in('exam_id', examIds);
+        (cfg || []).forEach((c: any) => configMap.set(c.exam_id, {
+          hidden: c.hidden === true,
+          include_in_pass: c.include_in_pass !== false,
+          order_index: c.order_index ?? null,
+        }));
+      }
+      items = (data || [])
+        .filter((row: any) => {
+          const cfg = configMap.get(row.exam_id);
+          return cfg?.hidden === true ? false : true;
+        })
+        .map((row: any) => {
+          let student_name = 'Anonymous';
+          let student_code = '';
+          const stu = row.students;
+          const stuObj = Array.isArray(stu) ? stu[0] : stu;
+          student_name = stuObj?.student_name || student_name;
+          student_code = stuObj?.code || student_code;
+          const er = Array.isArray(row.exam_results) ? row.exam_results[0] : row.exam_results;
+          let chosen: any = null;
+          if (examScoreSource === 'final') chosen = er?.final_score_percentage ?? er?.score_percentage;
+          else chosen = er?.score_percentage;
+          const score_percentage = chosen == null ? null : Number(chosen);
+          const passThresholdRaw = row.exams?.settings?.pass_percentage;
+          const pass_threshold = passThresholdRaw == null ? null : Number(passThresholdRaw);
+          const is_pass = (typeof score_percentage === 'number' && !Number.isNaN(score_percentage) && typeof pass_threshold === 'number' && !Number.isNaN(pass_threshold))
+            ? score_percentage >= pass_threshold
+            : null;
+          const cfg = configMap.get(row.exam_id) || {} as any;
+          return {
+            id: row.id,
+            exam_id: row.exam_id,
+            exam_title: row.exams?.title || 'Unknown Exam',
+            student_name,
+            student_code,
+            completion_status: row.completion_status,
+            submitted_at: row.submitted_at,
+            score_percentage,
+            pass_threshold,
+            is_pass,
+            _order_index: (cfg as any).order_index ?? null,
+          };
+        })
+        .sort((a: any, b: any) => {
+          const ao = a._order_index ?? 999999;
+          const bo = b._order_index ?? 999999;
+          if (ao !== bo) return ao - bo;
+          const as = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+          const bs = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+          return bs - as;
+        });
+    }
 
     return NextResponse.json({ items });
   } catch (error) {

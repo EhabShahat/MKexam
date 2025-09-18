@@ -459,18 +459,23 @@ export default function PublicResultsPage({
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 )}
                 <span className="font-semibold">
-                  {summaryQuery.data.pass_summary?.message || (summaryQuery.data.pass_summary?.passed ? 'Pass' : 'Fail')}
+                  {(() => {
+                    const m = summaryQuery.data.pass_summary?.message;
+                    if (m != null && String(m).trim() !== '') return m as string;
+                    return summaryQuery.data.pass_summary?.passed ? t(locale, 'pass') : t(locale, 'fail');
+                  })()}
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                {typeof summaryQuery.data.pass_summary?.exam_total === 'number' && summaryQuery.data.pass_summary.exam_total > 0 && (
-                  <span className="text-sm font-medium">
-                    {summaryQuery.data.pass_summary.exam_passed}/{summaryQuery.data.pass_summary.exam_total}
-                  </span>
-                )}
-                {typeof summaryQuery.data.pass_summary?.overall_score === 'number' && (
-                  <span className="font-bold">{summaryQuery.data.pass_summary.overall_score}%</span>
-                )}
+                  {typeof summaryQuery.data.pass_summary?.exam_total === 'number' && summaryQuery.data.pass_summary.exam_total > 0 && (
+                    <span className="text-sm font-medium">
+                      {summaryQuery.data.pass_summary.exam_passed}/{summaryQuery.data.pass_summary.exam_total}
+                    </span>
+                  )}
+                  {typeof summaryQuery.data.pass_summary?.overall_score === 'number' && (
+                    <span className="font-bold">{summaryQuery.data.pass_summary.overall_score}%</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

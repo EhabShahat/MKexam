@@ -68,58 +68,83 @@ export async function summaryGET(request: NextRequest) {
     // Compute exam score for the student across published exams
     const { data: attempts, error: attemptsErr } = await svc
       .from("exam_attempts")
-      .select(
-        `id, exam_id, submitted_at,
-         exam_results(score_percentage, final_score_percentage),
-         exams!inner(status, settings)`
+      .select(`
+        id, exam_id, completion_status, submitted_at,
+        exam_results!inner(score_percentage, final_score_percentage),
+        exams!inner(status, settings)`
       )
       .eq("student_id", (student as any).id)
-      .eq("exams.status", "published")
+      .eq("exams.status", "done")
       .order("submitted_at", { ascending: false });
     if (attemptsErr && (attemptsErr as any).code !== "PGRST116") {
       // Ignore when no rows (PGRST116: Results contain 0 rows)
       return NextResponse.json({ error: (attemptsErr as any).message }, { status: 400 });
     }
 
-    // Respect exam_public_config: include only exams where include_in_pass is true (default true if config missing)
+    // Respect exam_public_config: include all published exams; if student did not attend an included exam, count it as 0
     let examScores: number[] = [];
     let examPassCount = 0;
     let examTotalCount = 0;
-    if ((attempts || []).length > 0) {
-      const examIds = Array.from(new Set((attempts || []).map((r: any) => r.exam_id))).filter(Boolean);
-      let includeMap = new Map<string, boolean>();
-      if (examIds.length > 0) {
-        const { data: cfg, error: cfgErr } = await svc
-          .from("exam_public_config")
-          .select("exam_id, include_in_pass")
-          .in("exam_id", examIds);
-        if (!cfgErr) {
-          (cfg || []).forEach((c: any) => includeMap.set(c.exam_id, c.include_in_pass !== false));
-        }
-      }
-
-      const included = (attempts || []).filter((row: any) => includeMap.has(row.exam_id) ? (includeMap.get(row.exam_id) === true) : true);
-      const numericScores: number[] = [];
-      for (const row of included) {
-        const er = Array.isArray(row.exam_results) ? row.exam_results[0] : row.exam_results;
-        const ex = Array.isArray(row.exams) ? row.exams[0] : row.exams;
-        const pick = examScoreSource === 'final' ? er?.final_score_percentage : er?.score_percentage;
-        const n = pick == null ? null : Number(pick);
-        if (n != null && !Number.isNaN(n)) {
-          numericScores.push(n);
-        }
-        // Compute pass/fail for this exam if threshold exists
-        const thrRaw = ex?.settings?.pass_percentage;
-        if (thrRaw != null) {
-          examTotalCount += 1;
-          const thr = Number(thrRaw);
-          if (!Number.isNaN(thr) && n != null && !Number.isNaN(n) && n >= thr) {
-            examPassCount += 1;
-          }
-        }
-      }
-      examScores = numericScores;
+    // Fetch all published exams to ensure missing attempts still contribute as 0
+    const { data: publishedExams, error: exListErr } = await svc
+      .from("exams")
+      .select("id, settings")
+      .eq("status", "done");
+    if (exListErr && (exListErr as any).code !== "PGRST116") {
+      return NextResponse.json({ error: (exListErr as any).message }, { status: 400 });
     }
+    const allExams = (publishedExams || []) as any[];
+
+    // Build include map from exam_public_config for ALL published exams (default include = true)
+    const includeMap = new Map<string, boolean>();
+    if (allExams.length > 0) {
+      const examIds = allExams.map((e: any) => e.id);
+      const { data: cfg, error: cfgErr } = await svc
+        .from("exam_public_config")
+        .select("exam_id, include_in_pass")
+        .in("exam_id", examIds);
+      if (!cfgErr) {
+        (cfg || []).forEach((c: any) => includeMap.set(c.exam_id, c.include_in_pass !== false));
+      }
+    }
+
+    // Map latest attempt per exam (attempts are ordered desc by submitted_at)
+    const latestAttemptByExam = new Map<string, any>();
+    for (const row of (attempts || [])) {
+      if (!latestAttemptByExam.has(row.exam_id)) latestAttemptByExam.set(row.exam_id, row);
+    }
+
+    const numericScores: number[] = [];
+    for (const ex of allExams) {
+      const included = includeMap.has(ex.id) ? (includeMap.get(ex.id) === true) : true;
+      if (!included) continue;
+      const row = latestAttemptByExam.get(ex.id);
+      let n = 0; // default to 0 for not attended
+      if (row) {
+        const er = Array.isArray(row.exam_results) ? row.exam_results[0] : row.exam_results;
+        if (examScoreSource === 'final') {
+          const f = er?.final_score_percentage;
+          if (f != null && !Number.isNaN(Number(f))) {
+            n = Number(f);
+          } else {
+            const raw = er?.score_percentage;
+            if (raw != null && !Number.isNaN(Number(raw))) n = Number(raw);
+          }
+        } else {
+          const raw = er?.score_percentage;
+          if (raw != null && !Number.isNaN(Number(raw))) n = Number(raw);
+        }
+      }
+      numericScores.push(n);
+      // pass/fail per exam (use threshold if defined)
+      const thrRaw = ex?.settings?.pass_percentage;
+      if (thrRaw != null) {
+        examTotalCount += 1;
+        const thr = Number(thrRaw);
+        if (!Number.isNaN(thr) && n >= thr) examPassCount += 1;
+      }
+    }
+    examScores = numericScores;
 
     let examComponent: number | null = null;
     if (examScores.length > 0) {
