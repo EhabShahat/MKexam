@@ -467,15 +467,14 @@ export default function PublicResultsPage({
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                  {typeof summaryQuery.data.pass_summary?.exam_total === 'number' && summaryQuery.data.pass_summary.exam_total > 0 && (
-                    <span className="text-sm font-medium">
-                      {summaryQuery.data.pass_summary.exam_passed}/{summaryQuery.data.pass_summary.exam_total}
-                    </span>
-                  )}
-                  {typeof summaryQuery.data.pass_summary?.overall_score === 'number' && (
-                    <span className="font-bold">{summaryQuery.data.pass_summary.overall_score}%</span>
-                  )}
-                </div>
+                {typeof summaryQuery.data.pass_summary?.exam_total === 'number' && summaryQuery.data.pass_summary.exam_total > 0 && (
+                  <span className="text-sm font-medium">
+                    {summaryQuery.data.pass_summary.exam_passed}/{summaryQuery.data.pass_summary.exam_total}
+                  </span>
+                )}
+                {typeof summaryQuery.data.pass_summary?.overall_score === 'number' && (
+                  <span className="font-bold">{summaryQuery.data.pass_summary.overall_score}%</span>
+                )}
               </div>
             </div>
           </div>
