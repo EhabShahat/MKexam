@@ -12,12 +12,43 @@ create table if not exists public.exams (
   start_time timestamptz null,
   end_time timestamptz null,
   duration_minutes integer null,
-  status text not null default 'draft' check (status in ('draft','published','archived')),
+  status text not null default 'draft' check (status in ('draft','published','archived','done')),
   access_type text not null default 'open' check (access_type in ('open','code_based','ip_restricted')),
   settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure existing databases allow the new 'done' status (idempotent)
+do $$
+declare
+  r record;
+begin
+  -- Drop any existing status check constraints that don't include 'done'
+  for r in
+    select c.conname
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'exams'
+      and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) like '%status%in%('
+      and pg_get_constraintdef(c.oid) not like '%''done''%'
+  loop
+    execute format('alter table public.exams drop constraint %I', r.conname);
+  end loop;
+
+  -- Recreate the canonical constraint (no-op if already present)
+  begin
+    alter table public.exams
+      add constraint exams_status_check
+      check (status in ('draft','published','archived','done'));
+  exception when duplicate_object then
+    -- Already created
+    null;
+  end;
+end $$;
 
 create table if not exists public.questions (
   id uuid primary key default gen_random_uuid(),

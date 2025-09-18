@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireAdmin, getBearerToken } from "@/lib/admin";
+import { getCodeFormatSettings } from "@/lib/codeGenerator";
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,13 +40,16 @@ export async function POST(req: NextRequest) {
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
 
-    // Enforce single active exam: if creating as published, archive others first
+    // If creating as published, in single-exam mode mark other published exams as 'done'
     if (status === "published") {
-      const unpub = await svc
-        .from("exams")
-        .update({ status: "archived" })
-        .eq("status", "published");
-      if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+      const settings = await getCodeFormatSettings();
+      if (!settings.enable_multi_exam) {
+        const unpub = await svc
+          .from("exams")
+          .update({ status: "done" })
+          .eq("status", "published");
+        if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+      }
     }
 
     const { data, error } = await svc

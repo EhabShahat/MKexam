@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireAdmin, getBearerToken } from "@/lib/admin";
+import { getCodeFormatSettings } from "@/lib/codeGenerator";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ examId: string }> }) {
   try {
@@ -24,14 +25,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ examId: s
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
 
-    // If updating to published, archive any other published exams first
+    // If updating to published, in single-exam mode mark other published exams as 'done' first
     if (body && body.status === "published") {
-      const unpub = await svc
-        .from("exams")
-        .update({ status: "archived" })
-        .eq("status", "published")
-        .neq("id", examId);
-      if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+      const settings = await getCodeFormatSettings();
+      if (!settings.enable_multi_exam) {
+        const unpub = await svc
+          .from("exams")
+          .update({ status: "done" })
+          .eq("status", "published")
+          .neq("id", examId);
+        if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+      }
     }
 
     const { data, error } = await svc

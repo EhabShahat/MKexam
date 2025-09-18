@@ -33,6 +33,13 @@ export const statusConfig: StatusConfigs = {
     dot: "bg-gray-400",
     label: "Archived"
   },
+  done: {
+    bg: "bg-indigo-100",
+    text: "text-indigo-800",
+    border: "border-indigo-200",
+    dot: "bg-indigo-400",
+    label: "Done"
+  },
   active: {
     bg: "bg-blue-100",
     text: "text-blue-800",

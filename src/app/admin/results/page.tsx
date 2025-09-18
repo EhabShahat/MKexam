@@ -21,6 +21,7 @@ interface Exam {
 interface Attempt {
   id: string;
   student_name: string | null;
+  code?: string | null;
   completion_status: string | null;
   started_at: string | null;
   submitted_at: string | null;
@@ -61,8 +62,8 @@ export default function AdminResultsIndex() {
     const data = allAttemptsQuery.data;
     if (!data) return;
     const exams = data.exams as Exam[];
-    const rows = data.rows as Array<{ name: string; scores: Record<string, number | null> }>;
-    const headers = ["Student", ...exams.map((e) => e.title)];
+    const rows = data.rows as Array<{ name: string; code?: string | null; scores: Record<string, number | null> }>;
+    const headers = ["Student", "Code", ...exams.map((e) => e.title)];
     const esc = (v: any) => {
       if (v === null || v === undefined) return "";
       const s = String(v);
@@ -73,6 +74,7 @@ export default function AdminResultsIndex() {
     for (const r of rows) {
       const line = [
         esc(r.name),
+        esc(r.code ?? ""),
         ...exams.map((e) => {
           const v = r.scores?.[e.id];
           return v == null ? "" : String(Math.round(v * 100) / 100);
@@ -97,9 +99,9 @@ export default function AdminResultsIndex() {
     if (!data) return;
     const XLSX = await import("xlsx");
     const exams = data.exams as Exam[];
-    const rows = data.rows as Array<{ name: string; scores: Record<string, number | null> }>;
+    const rows = data.rows as Array<{ name: string; code?: string | null; scores: Record<string, number | null> }>;
     const out = rows.map((r) => {
-      const obj: Record<string, any> = { Student: r.name };
+      const obj: Record<string, any> = { Student: r.name, Code: r.code ?? "" };
       for (const e of exams) {
         const v = r.scores?.[e.id];
         obj[e.title] = v == null ? "" : Math.round(v * 100) / 100;
@@ -127,11 +129,25 @@ export default function AdminResultsIndex() {
           else resultsByExam[ex.id] = [];
         })
       );
+      // Also fetch master students list to map codes by name as a fallback
+      let nameToCode: Map<string, string> = new Map();
+      try {
+        const sRes = await authFetch(`/api/admin/students`);
+        const sJson = await sRes.json();
+        if (sRes.ok && Array.isArray(sJson?.students)) {
+          for (const s of sJson.students) {
+            const nm = (String(s?.student_name ?? "").trim()) || "";
+            const cd = s?.code ? String(s.code) : "";
+            if (nm && cd && !nameToCode.has(nm)) nameToCode.set(nm, cd);
+          }
+        }
+      } catch {}
       // Build per-student aggregation by student_name
-      const byStudent: Map<string, { name: string; scores: Record<string, number | null> }> = new Map();
+      const byStudent: Map<string, { name: string; code: string | null; scores: Record<string, number | null> }> = new Map();
       for (const ex of exams) {
         const items = resultsByExam[ex.id] || [];
         const bestByName: Map<string, number> = new Map();
+        const codeByName: Map<string, string | null> = new Map();
         for (const at of items) {
           const name = (at.student_name ?? "").trim() || "(Anonymous)";
           const val = at.final_score_percentage ?? at.score_percentage;
@@ -139,18 +155,27 @@ export default function AdminResultsIndex() {
           if (n == null || Number.isNaN(n)) continue;
           const prev = bestByName.get(name);
           if (prev == null || n > prev) bestByName.set(name, n);
+          const existingCode = codeByName.get(name);
+          if (!existingCode && at.code) codeByName.set(name, at.code);
+          else if (!codeByName.has(name)) codeByName.set(name, at.code ?? (nameToCode.get(name) ?? null));
         }
         // Merge into rows
         for (const [name, val] of bestByName.entries()) {
-          const row = byStudent.get(name) || { name, scores: {} };
+          const row = byStudent.get(name) || { name, code: codeByName.get(name) ?? (nameToCode.get(name) ?? null), scores: {} };
+          if (row.code == null) row.code = codeByName.get(name) ?? (nameToCode.get(name) ?? null);
           row.scores[ex.id] = val;
           byStudent.set(name, row);
         }
         // Ensure students with attempts but null score appear
         for (const at of items) {
           const name = (at.student_name ?? "").trim() || "(Anonymous)";
-          if (!byStudent.has(name)) byStudent.set(name, { name, scores: { [ex.id]: null } });
-          else if (byStudent.get(name)!.scores[ex.id] === undefined) byStudent.get(name)!.scores[ex.id] = null;
+          if (!byStudent.has(name)) byStudent.set(name, { name, code: at.code ?? (nameToCode.get(name) ?? null), scores: { [ex.id]: null } });
+          else {
+            const existing = byStudent.get(name)!;
+            if (existing.scores[ex.id] === undefined) existing.scores[ex.id] = null;
+            if (!existing.code) existing.code = at.code ?? (nameToCode.get(name) ?? null);
+            byStudent.set(name, existing);
+          }
         }
       }
       // Return rows sorted by name
@@ -277,6 +302,7 @@ export default function AdminResultsIndex() {
       const rows = filteredAttempts.map((attempt) => ({
         id: attempt.id,
         student: attempt.student_name ?? "",
+        code: attempt.code ?? "",
         status: attempt.completion_status ?? "",
         started_at: attempt.started_at ?? "",
         submitted_at: attempt.submitted_at ?? "",
@@ -286,7 +312,10 @@ export default function AdminResultsIndex() {
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Attempts");
-      XLSX.writeFile(wb, `attempts_${examId}.xlsx`);
+      const title = (selectedExam?.title || "").trim();
+      const baseName = title ? `attempts_${title}` : `attempts_${examId}`;
+      const safeName = baseName.replace(/[\\/:*?"<>|]+/g, "_").trim();
+      XLSX.writeFile(wb, `${safeName}.xlsx`);
       toast.success({ title: "Export Complete", message: "XLSX file saved successfully" });
     } catch (e: any) {
       toast.error({ title: "Export Failed", message: e?.message || "Unknown error" });

@@ -8,6 +8,15 @@ export async function dashboardGET(req: NextRequest) {
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
 
+    // Proactively mark any ended published exams as 'done'
+    try {
+      await svc.rpc("mark_done_exams");
+    } catch (e) {
+      // Non-fatal; dashboard should still load
+      // eslint-disable-next-line no-console
+      console.warn("mark_done_exams RPC failed:", (e as any)?.message || e);
+    }
+
     const examsQuery = await svc
       .from("exams")
       .select(`

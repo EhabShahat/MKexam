@@ -189,6 +189,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
           const mod = await import("@/server/admin/examsActions");
           return mod.examsIdPublishPOST(req, id);
         }
+        if (sub2 === "done") {
+          const mod = await import("@/server/admin/examsActions");
+          return mod.examsIdDonePOST(req, id);
+        }
         if (sub2 === "duplicate") {
           const mod = await import("@/server/admin/examsActions");
           return mod.examsIdDuplicatePOST(req, id);

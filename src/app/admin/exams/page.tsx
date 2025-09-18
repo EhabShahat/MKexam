@@ -15,7 +15,7 @@ import StatusBadge from "@/components/admin/StatusBadge";
 interface Exam {
   id: string;
   title: string;
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published' | 'archived' | 'done';
   access_type: string;
   start_time: string | null;
   end_time: string | null;
@@ -124,9 +124,7 @@ export default function AdminExamsPage() {
             <Link href={`/admin/exams/${exam.id}/questions`}>
               <ActionButton variant="secondary" size="sm">Questions</ActionButton>
             </Link>
-            <Link href={`/admin/exams/${exam.id}/students-codes`}>
-              <ActionButton variant="secondary" size="sm">Students</ActionButton>
-            </Link>
+           
 
             <ActionButton
               variant="secondary"

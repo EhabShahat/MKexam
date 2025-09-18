@@ -6,12 +6,51 @@ export async function examsIdAttemptsGET(req: NextRequest, examId: string) {
   try {
     await requireAdmin(req);
     const token = await getBearerToken(req);
-    const svc = supabaseServer(token || undefined);
+    // Use service role to bypass RLS for admin-only reporting joins
+    const svc = supabaseServer();
 
     // Try RPC first
     const rpc = await svc.rpc("admin_list_attempts", { p_exam_id: examId });
     if (!rpc.error && Array.isArray(rpc.data)) {
-      return NextResponse.json({ items: rpc.data });
+      let rows: any[] = rpc.data as any[];
+      // Enrich with student codes if missing using a robust two-step join
+      const needCodes = rows.some((r) => typeof r.code === "undefined" || r.code === null);
+      if (needCodes && rows.length > 0) {
+        const attemptIds = rows.map((r) => r.id).filter(Boolean);
+        const linkQ = await svc
+          .from("exam_attempts")
+          .select("id, student_id")
+          .in("id", attemptIds);
+        if (!linkQ.error) {
+          const attemptToStudent = new Map<string, string | null>();
+          const studentIds: string[] = [];
+          for (const rec of (linkQ.data as any[]) ?? []) {
+            const sid = rec?.student_id ?? null;
+            attemptToStudent.set(rec.id, sid);
+            if (sid) studentIds.push(sid);
+          }
+          let studMap = new Map<string, string | null>();
+          if (studentIds.length > 0) {
+            const stuQ = await svc
+              .from("students")
+              .select("id, code")
+              .in("id", Array.from(new Set(studentIds)));
+            if (!stuQ.error) {
+              for (const s of (stuQ.data as any[]) ?? []) {
+                studMap.set(s.id, s.code ?? null);
+              }
+            }
+          }
+          rows = rows.map((r) => {
+            const existing = (r as any).code;
+            if (typeof existing !== "undefined" && existing !== null) return r;
+            const sid = attemptToStudent.get(r.id as string) ?? null;
+            const code = sid ? (studMap.get(sid) ?? null) : null;
+            return { ...r, code };
+          });
+        }
+      }
+      return NextResponse.json({ items: rows });
     }
     if (rpc.error) {
       // eslint-disable-next-line no-console
@@ -64,6 +103,7 @@ export async function examsIdAttemptsGET(req: NextRequest, examId: string) {
         completion_status: a.completion_status,
         ip_address: a.ip_address,
         student_name: a?.students?.student_name ?? a?.student_name ?? null,
+        code: a?.students?.code ?? null,
         score_percentage: a?.exam_results?.score_percentage ?? null,
         final_score_percentage: a?.exam_results?.final_score_percentage ?? null,
         manual_total_count: manualTotal,
@@ -83,7 +123,8 @@ export async function examsIdAttemptsExportGET(req: NextRequest, examId: string)
   try {
     await requireAdmin(req);
     const token = await getBearerToken(req);
-    const svc = supabaseServer(token || undefined);
+    // Use service role to bypass RLS for admin-only reporting joins
+    const svc = supabaseServer();
 
     let rows: any[] | null = null;
     const rpc = await svc.rpc("admin_list_attempts", { p_exam_id: examId });
@@ -110,13 +151,52 @@ export async function examsIdAttemptsExportGET(req: NextRequest, examId: string)
         completion_status: a.completion_status,
         ip_address: a.ip_address,
         student_name: a?.students?.student_name ?? a?.student_name ?? null,
+        code: a?.students?.code ?? null,
         score_percentage: a?.exam_results?.score_percentage ?? null,
       }));
+    }
+
+    // If coming from RPC and code is missing, enrich with a secondary query
+    if (rows && rows.length > 0 && rows.some((r: any) => typeof r.code === "undefined" || r.code === null)) {
+      const attemptIds = rows.map((r: any) => r.id).filter(Boolean);
+      const linkQ = await svc
+        .from("exam_attempts")
+        .select("id, student_id")
+        .in("id", attemptIds);
+      if (!linkQ.error) {
+        const attemptToStudent = new Map<string, string | null>();
+        const studentIds: string[] = [];
+        for (const rec of (linkQ.data as any[]) ?? []) {
+          const sid = rec?.student_id ?? null;
+          attemptToStudent.set(rec.id, sid);
+          if (sid) studentIds.push(sid);
+        }
+        let studMap = new Map<string, string | null>();
+        if (studentIds.length > 0) {
+          const stuQ = await svc
+            .from("students")
+            .select("id, code")
+            .in("id", Array.from(new Set(studentIds)));
+          if (!stuQ.error) {
+            for (const s of (stuQ.data as any[]) ?? []) {
+              studMap.set(s.id, s.code ?? null);
+            }
+          }
+        }
+        rows = rows.map((r: any) => {
+          const existing = (r as any).code;
+          if (typeof existing !== "undefined" && existing !== null) return r;
+          const sid = attemptToStudent.get(r.id as string) ?? null;
+          const code = sid ? (studMap.get(sid) ?? null) : null;
+          return { ...r, code };
+        });
+      }
     }
 
     const headers = [
       "id",
       "student_name",
+      "code",
       "completion_status",
       "started_at",
       "submitted_at",
@@ -135,10 +215,12 @@ export async function examsIdAttemptsExportGET(req: NextRequest, examId: string)
 
     const lines: string[] = [];
     lines.push(headers.join(","));
+    const getCode = (r: any) => (r?.code ?? r?.student_code ?? (r?.students ? r?.students?.code : undefined) ?? "");
     for (const r of rows) {
       lines.push([
         esc(r.id),
         esc(r.student_name),
+        esc(getCode(r)),
         esc(r.completion_status),
         esc(r.started_at),
         esc(r.submitted_at),
@@ -147,11 +229,27 @@ export async function examsIdAttemptsExportGET(req: NextRequest, examId: string)
       ].join(","));
     }
 
+    // Try to fetch exam title for a better, Arabic-friendly filename
+    let examTitle: string | null = null;
+    try {
+      const exq = await svc
+        .from("exams")
+        .select("title")
+        .eq("id", examId)
+        .maybeSingle();
+      if (!exq.error) examTitle = (exq.data as any)?.title ?? null;
+    } catch {}
+
+    const baseName = examTitle ? `attempts_${examTitle}` : `attempts_${examId}`;
+    const sanitized = baseName.replace(/[\\\/:*?"<>|]+/g, "_").trim();
+    const encoded = encodeURIComponent(sanitized + ".csv");
+
     const csv = "\ufeff" + lines.join("\n");
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename=attempts_${examId}.csv`,
+        // Include both filename (fallback ASCII) and filename* (UTF-8) for Arabic support
+        "Content-Disposition": `attachment; filename="attempts.csv"; filename*=UTF-8''${encoded}`,
         "Cache-Control": "no-store",
       },
     });

@@ -4,6 +4,8 @@ import PublicResultsPage from "./(public)/results/page";
 import MultiExamEntry from "@/components/public/MultiExamEntry";
 import Link from "next/link";
 import { resolveStudentLocale, getDir, type StudentLocale, t } from "@/i18n/student";
+import { getCodeFormatSettings } from "@/lib/codeGenerator";
+import { redirect } from "next/navigation";
 
 type MinimalExam = {
   id: string;
@@ -60,8 +62,43 @@ export default async function Home() {
       </PublicLocaleProvider>
     );
   }
-  // Exam mode: render multi-exam entry (code-based selection)
-  console.log("🚀 Rendering MultiExamEntry on root (exam mode)");
+  // Exam mode
+  const codeSettings = await getCodeFormatSettings();
+  const isMultiExam = codeSettings.enable_multi_exam ?? true;
+
+  if (!isMultiExam) {
+    console.log("🎯 Single-exam mode enabled. Locating active published exam...");
+    const { data: exams, error: exErr } = await svc
+      .from("exams")
+      .select("id, title, status, start_time, end_time, access_type, created_at")
+      .eq("status", "published")
+      .order("start_time", { ascending: true, nullsFirst: true });
+
+    if (exErr) {
+      console.warn("⚠️ Failed to load published exams:", exErr.message);
+    }
+
+    const now = new Date();
+    const list = (exams || []).map((e: any) => {
+      const start = e.start_time ? new Date(e.start_time as any) : null;
+      const end = e.end_time ? new Date(e.end_time as any) : null;
+      const notStarted = !!(start && now < start);
+      const ended = !!(end && now > end);
+      const isActive = !notStarted && !ended;
+      return { ...e, is_active: isActive };
+    });
+    const firstActive = list.find((e: any) => e.is_active) || list[0] || null;
+
+    if (firstActive?.id) {
+      console.log("➡️ Redirecting to active exam:", firstActive.id);
+      redirect(`/exam/${firstActive.id}`);
+    }
+
+    // No published exam found; show a friendly empty state
+    return <NoExamsPage />;
+  }
+
+  console.log("🚀 Multi-exam mode enabled. Rendering MultiExamEntry on root (exam mode)");
   return (
     <PublicLocaleProvider>
       <MultiExamEntry />

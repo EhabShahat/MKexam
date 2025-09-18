@@ -162,7 +162,7 @@ export async function extraScoresExamsGET(req: NextRequest) {
     const { data: exams, error: examsErr } = await svc
       .from("exams")
       .select("id, title, status")
-      .eq("status", "published")
+      .eq("status", "done")
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
     if (examsErr) throw examsErr;

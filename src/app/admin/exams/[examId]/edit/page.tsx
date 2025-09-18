@@ -254,6 +254,7 @@ export default function AdminEditExamPage() {
             >
               <option value="draft">Draft</option>
               <option value="published">Published</option>
+              <option value="done">Done</option>
               <option value="archived">Archived</option>
             </select>
           </div>

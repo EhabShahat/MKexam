@@ -17,10 +17,18 @@ export async function POST(req: NextRequest) {
 
     const autoSubmittedCount = Array.isArray(data) ? data[0]?.auto_submitted_count || 0 : data?.auto_submitted_count || 0;
 
+    // Also mark ended exams as 'done'
+    const { data: doneData, error: doneErr } = await supabase.rpc("mark_done_exams");
+    if (doneErr) {
+      console.error("Mark done exams error:", doneErr);
+    }
+    const doneCount = Array.isArray(doneData) ? doneData[0]?.updated_count || 0 : (doneData as any)?.updated_count || 0;
+
     return NextResponse.json({
       success: true,
       auto_submitted_count: autoSubmittedCount,
-      message: `Auto-submitted ${autoSubmittedCount} expired attempts`
+      done_updated_count: doneCount,
+      message: `Auto-submitted ${autoSubmittedCount} expired attempts; marked ${doneCount} exams as done`
     });
 
   } catch (error: any) {

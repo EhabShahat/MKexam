@@ -13,7 +13,7 @@ import StatusBadge from "@/components/admin/StatusBadge";
 interface Exam {
   id: string;
   title: string;
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published' | 'archived' | 'done';
   access_type: string;
   start_time: string | null;
   end_time: string | null;
@@ -29,7 +29,7 @@ interface AppSettings {
 export default function AdminHomePage() {
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [disableMessage, setDisableMessage] = useState("");
-  const [examFilter, setExamFilter] = useState<'all' | 'draft' | 'published' | 'archived'>('all');
+  const [examFilter, setExamFilter] = useState<'all' | 'draft' | 'published' | 'archived' | 'done'>('all');
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -109,6 +109,23 @@ export default function AdminHomePage() {
     },
     onError: (error: any) => {
       toast.error({ title: "Failed to publish exam", message: error.message });
+    },
+  });
+
+  const doneExamMutation = useMutation({
+    mutationFn: async (examId: string) => {
+      const res = await authFetch(`/api/admin/exams/${examId}/done`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to mark exam as done");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      toast.success({ title: "Exam marked as done", message: "Exam is no longer active" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Failed to mark as done", message: error.message });
     },
   });
 
@@ -308,7 +325,7 @@ export default function AdminHomePage() {
       </ModernCard>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard 
           title="Total Exams" 
           value={stats?.totalExams ?? 0} 
@@ -543,11 +560,12 @@ export default function AdminHomePage() {
 
         {/* Filter Tabs */}
         <div className="flex flex-wrap gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
-          {[
+          {[ 
             { key: 'all', label: 'All', count: exams.length },
             { key: 'draft', label: 'Draft', count: exams.filter(e => e.status === 'draft').length },
             { key: 'published', label: 'Published', count: exams.filter(e => e.status === 'published').length },
             { key: 'archived', label: 'Archived', count: exams.filter(e => e.status === 'archived').length },
+            { key: 'done', label: 'Done', count: exams.filter(e => e.status === 'done').length },
           ].map(({ key, label, count }) => (
             <button
               key={key}
@@ -577,8 +595,10 @@ export default function AdminHomePage() {
                 key={exam.id} 
                 exam={exam} 
                 onPublish={() => publishExamMutation.mutate(exam.id)}
+                onDone={() => doneExamMutation.mutate(exam.id)}
                 onArchive={() => archiveExamMutation.mutate(exam.id)}
                 isPublishing={publishExamMutation.isPending}
+                isMarkingDone={doneExamMutation.isPending}
                 isArchiving={archiveExamMutation.isPending}
               />
             ))}
@@ -686,14 +706,18 @@ export default function AdminHomePage() {
 function ExamRow({ 
   exam, 
   onPublish, 
+  onDone,
   onArchive, 
   isPublishing, 
+  isMarkingDone,
   isArchiving 
 }: { 
   exam: Exam; 
   onPublish: () => void;
+  onDone: () => void;
   onArchive: () => void;
   isPublishing: boolean;
+  isMarkingDone: boolean;
   isArchiving: boolean;
 }) {
   return (
@@ -751,6 +775,22 @@ function ExamRow({
           </ActionButton>
         )}
         {exam.status === 'published' && (
+          <ActionButton
+            variant="success"
+            size="sm"
+            onClick={onDone}
+            loading={isMarkingDone}
+            className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            }
+          >
+            Done
+          </ActionButton>
+        )}
+        {exam.status === 'done' && (
           <ActionButton
             variant="warning"
             size="sm"

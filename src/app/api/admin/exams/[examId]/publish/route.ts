@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, getBearerToken } from "@/lib/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getCodeFormatSettings } from "@/lib/codeGenerator";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ examId: string }> }) {
   try {
@@ -18,13 +19,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ examId: st
     if (q.error) return NextResponse.json({ error: q.error.message }, { status: 400 });
     if ((q.count ?? 0) < 1) return NextResponse.json({ error: "no_questions" }, { status: 400 });
 
-    // Unpublish any other active exam to enforce single active exam at a time
-    const unpub = await svc
-      .from("exams")
-      .update({ status: "archived" })
-      .eq("status", "published")
-      .neq("id", examId);
-    if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+    // If multi-exam mode is disabled, mark any other published exams as 'done'
+    const settings = await getCodeFormatSettings();
+    if (!settings.enable_multi_exam) {
+      const unpub = await svc
+        .from("exams")
+        .update({ status: "done" })
+        .eq("status", "published")
+        .neq("id", examId);
+      if (unpub.error) return NextResponse.json({ error: unpub.error.message }, { status: 400 });
+    }
 
     const upd = await svc
       .from("exams")

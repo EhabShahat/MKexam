@@ -2,6 +2,7 @@ export type StatusType =
   "draft" | 
   "published" | 
   "archived" | 
+  "done" | 
   "active" | 
   "inactive" | 
   "used" | 

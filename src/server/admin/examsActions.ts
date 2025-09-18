@@ -22,23 +22,13 @@ export async function examsIdPublishPOST(req: NextRequest, examId: string) {
 
     const settings = await getCodeFormatSettings();
     if (!settings.enable_multi_exam) {
-      const publishedExams = await svc
+      const markDone = await svc
         .from("exams")
-        .select("id")
+        .update({ status: "done" })
         .eq("status", "published")
         .neq("id", examId);
-      if (publishedExams.error)
-        return NextResponse.json({ error: publishedExams.error.message }, { status: 400 });
-      if (publishedExams.data && publishedExams.data.length > 0) {
-        return NextResponse.json(
-          {
-            error: "single_exam_mode_restriction",
-            message:
-              "Only one exam can be published in single exam mode. Please archive other published exams first.",
-          },
-          { status: 400 }
-        );
-      }
+      if (markDone.error)
+        return NextResponse.json({ error: markDone.error.message }, { status: 400 });
     }
 
     const upd = await svc
@@ -124,6 +114,29 @@ export async function examsIdArchivePOST(req: NextRequest, examId: string) {
     const upd = await svc
       .from("exams")
       .update({ status: "archived" })
+      .eq("id", examId)
+      .select("*")
+      .single();
+    if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 400 });
+    return NextResponse.json({ item: upd.data });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+export async function examsIdDonePOST(req: NextRequest, examId: string) {
+  try {
+    await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+
+    const ex = await svc.from("exams").select("id,status").eq("id", examId).single();
+    if (ex.error) return NextResponse.json({ error: ex.error.message }, { status: 404 });
+
+    const upd = await svc
+      .from("exams")
+      .update({ status: "done" })
       .eq("id", examId)
       .select("*")
       .single();
