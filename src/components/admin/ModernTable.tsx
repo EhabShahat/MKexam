@@ -67,7 +67,7 @@ export default function ModernTable({
                     ${column.align === "center" ? "text-center" : ""}
                     ${column.align === "right" ? "text-right" : "text-left"}
                   `}
-                  style={{ width: column.width }}
+                  style={{ width: column.width, minWidth: column.width }}
                 >
                   {column.label}
                 </th>
@@ -92,6 +92,7 @@ export default function ModernTable({
                       ${column.align === "center" ? "text-center" : ""}
                       ${column.align === "right" ? "text-right" : "text-left"}
                     `}
+                    style={{ width: column.width, minWidth: column.width }}
                   >
                     {renderCell(item, column)}
                   </td>

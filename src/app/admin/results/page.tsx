@@ -33,10 +33,31 @@ interface Attempt {
   manual_pending_count?: number | null;
 }
 
+// Extra score field definition (subset)
+interface ExtraField {
+  key: string;
+  label: string;
+  type: "number" | "text" | "boolean";
+  hidden?: boolean;
+  include_in_pass?: boolean;
+  pass_weight?: number | null;
+  max_points?: number | null;
+  bool_true_points?: number | null;
+  bool_false_points?: number | null;
+  text_score_map?: Record<string, number> | null;
+}
+
+interface AppSettings {
+  result_pass_calc_mode?: "best" | "avg";
+  result_overall_pass_threshold?: number;
+  result_exam_weight?: number;
+}
+
 export default function AdminResultsIndex() {
   const ALL = "__ALL__";
   const [examId, setExamId] = useState<string>("");
   const [studentFilter, setStudentFilter] = useState("");
+  const [allSearch, setAllSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
@@ -58,12 +79,22 @@ export default function AdminResultsIndex() {
     },
   });
 
+  // Only show published and done exams in UI (and ALL aggregation)
+  const visibleExams = useMemo(() =>
+    (examsQuery.data ?? []).filter((e) => e.status === "published" || e.status === "done"),
+  [examsQuery.data]);
+
   const handleExportAllCsv = async () => {
-    const data = allAttemptsQuery.data;
-    if (!data) return;
-    const exams = data.exams as Exam[];
-    const rows = data.rows as Array<{ name: string; code?: string | null; scores: Record<string, number | null> }>;
-    const headers = ["Student", "Code", ...exams.map((e) => e.title)];
+    const exams = visibleExams;
+    const fields = visibleExtraFields;
+    const rows = filteredAllRows as Array<{ name: string; code: string | null; scores: Record<string, number | null>; summary?: { overall_score: number | null } }>;
+    const headers = [
+      "Student",
+      "Code",
+      ...exams.map((e) => e.title),
+      ...fields.map((f) => f.label || f.key),
+      "Final",
+    ];
     const esc = (v: any) => {
       if (v === null || v === undefined) return "";
       const s = String(v);
@@ -72,14 +103,21 @@ export default function AdminResultsIndex() {
     const lines: string[] = [];
     lines.push(headers.join(","));
     for (const r of rows) {
-      const line = [
-        esc(r.name),
-        esc(r.code ?? ""),
-        ...exams.map((e) => {
-          const v = r.scores?.[e.id];
-          return v == null ? "" : String(Math.round(v * 100) / 100);
-        }),
-      ];
+      const data = r.code ? (extrasByCode.get(r.code) || {}) : {};
+      const examsVals = exams.map((e) => {
+        const v = r.scores?.[e.id];
+        return v == null || Number.isNaN(Number(v)) ? "" : Number(v).toFixed(2);
+      });
+      const extraVals = fields.map((f) => {
+        const v = (data as any)?.[f.key];
+        if (v == null || v === "") return "";
+        if (f.type === 'boolean') return String(v);
+        const n = Number(v);
+        if (!Number.isNaN(n)) return Number(n).toFixed(2);
+        return String(v);
+      });
+      const finalVal = r?.summary?.overall_score != null ? Number(r.summary.overall_score).toFixed(2) : "";
+      const line = [esc(r.name), esc(r.code ?? ""), ...examsVals.map(esc), ...extraVals.map(esc), esc(finalVal)];
       lines.push(line.join(","));
     }
     const csv = "\ufeff" + lines.join("\n");
@@ -95,17 +133,25 @@ export default function AdminResultsIndex() {
   };
 
   const handleExportAllXlsx = async () => {
-    const data = allAttemptsQuery.data;
-    if (!data) return;
     const XLSX = await import("xlsx");
-    const exams = data.exams as Exam[];
-    const rows = data.rows as Array<{ name: string; code?: string | null; scores: Record<string, number | null> }>;
+    const exams = visibleExams;
+    const fields = visibleExtraFields;
+    const rows = filteredAllRows as Array<{ name: string; code: string | null; scores: Record<string, number | null>; summary?: { overall_score: number | null } }>;
     const out = rows.map((r) => {
       const obj: Record<string, any> = { Student: r.name, Code: r.code ?? "" };
       for (const e of exams) {
         const v = r.scores?.[e.id];
-        obj[e.title] = v == null ? "" : Math.round(v * 100) / 100;
+        obj[e.title] = v == null || Number.isNaN(Number(v)) ? "" : Number(v).toFixed(2);
       }
+      const data = r.code ? (extrasByCode.get(r.code) || {}) : {};
+      for (const f of fields) {
+        const v = (data as any)?.[f.key];
+        if (v == null || v === "") obj[f.label || f.key] = "";
+        else if (f.type === 'boolean') obj[f.label || f.key] = String(v);
+        else if (!Number.isNaN(Number(v))) obj[f.label || f.key] = Number(v).toFixed(2);
+        else obj[f.label || f.key] = String(v);
+      }
+      obj["Final"] = r?.summary?.overall_score != null ? Number(r.summary.overall_score).toFixed(2) : "";
       return obj;
     });
     const ws = XLSX.utils.json_to_sheet(out);
@@ -116,10 +162,10 @@ export default function AdminResultsIndex() {
 
   // Aggregated attempts across all exams when Select All is chosen
   const allAttemptsQuery = useQuery({
-    enabled: examId === ALL && (examsQuery.data?.length || 0) > 0,
+    enabled: examId === ALL && (visibleExams.length || 0) > 0,
     queryKey: ["admin", "attempts", "ALL"],
     queryFn: async () => {
-      const exams = examsQuery.data ?? [];
+      const exams = visibleExams ?? [];
       const resultsByExam: Record<string, any[]> = {};
       await Promise.all(
         exams.map(async (ex) => {
@@ -129,8 +175,10 @@ export default function AdminResultsIndex() {
           else resultsByExam[ex.id] = [];
         })
       );
-      // Also fetch master students list to map codes by name as a fallback
+      // Also fetch master students list to map codes and ids
       let nameToCode: Map<string, string> = new Map();
+      let codeToId: Map<string, string> = new Map();
+      let nameToId: Map<string, string> = new Map();
       try {
         const sRes = await authFetch(`/api/admin/students`);
         const sJson = await sRes.json();
@@ -138,16 +186,20 @@ export default function AdminResultsIndex() {
           for (const s of sJson.students) {
             const nm = (String(s?.student_name ?? "").trim()) || "";
             const cd = s?.code ? String(s.code) : "";
+            const sid = s?.student_id ? String(s.student_id) : "";
             if (nm && cd && !nameToCode.has(nm)) nameToCode.set(nm, cd);
+            if (cd && sid) codeToId.set(cd, sid);
+            if (nm && sid && !nameToId.has(nm)) nameToId.set(nm, sid);
           }
         }
       } catch {}
       // Build per-student aggregation by student_name
-      const byStudent: Map<string, { name: string; code: string | null; scores: Record<string, number | null> }> = new Map();
+      const byStudent: Map<string, { name: string; code: string | null; student_id: string | null; scores: Record<string, number | null> }> = new Map();
       for (const ex of exams) {
         const items = resultsByExam[ex.id] || [];
         const bestByName: Map<string, number> = new Map();
         const codeByName: Map<string, string | null> = new Map();
+        const idByName: Map<string, string | null> = new Map();
         for (const at of items) {
           const name = (at.student_name ?? "").trim() || "(Anonymous)";
           const val = at.final_score_percentage ?? at.score_percentage;
@@ -158,22 +210,30 @@ export default function AdminResultsIndex() {
           const existingCode = codeByName.get(name);
           if (!existingCode && at.code) codeByName.set(name, at.code);
           else if (!codeByName.has(name)) codeByName.set(name, at.code ?? (nameToCode.get(name) ?? null));
+          // set id by code or name
+          if (!idByName.has(name)) {
+            const code = at.code ?? (nameToCode.get(name) ?? null);
+            const sid = code ? (codeToId.get(code) ?? null) : (nameToId.get(name) ?? null);
+            idByName.set(name, sid ?? null);
+          }
         }
         // Merge into rows
         for (const [name, val] of bestByName.entries()) {
-          const row = byStudent.get(name) || { name, code: codeByName.get(name) ?? (nameToCode.get(name) ?? null), scores: {} };
+          const row = byStudent.get(name) || { name, code: codeByName.get(name) ?? (nameToCode.get(name) ?? null), student_id: idByName.get(name) ?? null, scores: {} };
           if (row.code == null) row.code = codeByName.get(name) ?? (nameToCode.get(name) ?? null);
+          if (row.student_id == null) row.student_id = idByName.get(name) ?? null;
           row.scores[ex.id] = val;
           byStudent.set(name, row);
         }
         // Ensure students with attempts but null score appear
         for (const at of items) {
           const name = (at.student_name ?? "").trim() || "(Anonymous)";
-          if (!byStudent.has(name)) byStudent.set(name, { name, code: at.code ?? (nameToCode.get(name) ?? null), scores: { [ex.id]: null } });
+          if (!byStudent.has(name)) byStudent.set(name, { name, code: at.code ?? (nameToCode.get(name) ?? null), student_id: (at.code ? (codeToId.get(at.code) ?? null) : (nameToId.get(name) ?? null)), scores: { [ex.id]: null } });
           else {
             const existing = byStudent.get(name)!;
             if (existing.scores[ex.id] === undefined) existing.scores[ex.id] = null;
             if (!existing.code) existing.code = at.code ?? (nameToCode.get(name) ?? null);
+            if (!existing.student_id) existing.student_id = (existing.code ? (codeToId.get(existing.code) ?? null) : (nameToId.get(name) ?? null));
             byStudent.set(name, existing);
           }
         }
@@ -204,15 +264,18 @@ export default function AdminResultsIndex() {
   }, [examId, examsQuery.data]);
 
   const selectedExam = useMemo(() => 
-    examsQuery.data?.find((e) => e.id === examId) ?? null, 
-    [examsQuery.data, examId]
+    visibleExams.find((e) => e.id === examId) ?? null, 
+    [visibleExams, examId]
   );
 
   const filteredAttempts = useMemo(() => {
     const rows = attemptsQuery.data ?? [];
     return rows.filter((attempt) => {
-      if (studentFilter && !String(attempt.student_name || "").toLowerCase().includes(studentFilter.toLowerCase())) {
-        return false;
+      if (studentFilter) {
+        const term = studentFilter.toLowerCase().trim();
+        const nm = String(attempt.student_name || "").toLowerCase();
+        const cd = String(attempt.code || "").toLowerCase();
+        if (!nm.includes(term) && !cd.includes(term)) return false;
       }
       if (startDate && attempt.started_at) {
         const startDateTime = new Date(startDate);
@@ -358,26 +421,142 @@ export default function AdminResultsIndex() {
   };
 
   const columns = [
-    { key: "student", label: "Student",  },
-    { key: "time", label: "Time", width: "20vw" },
-    { key: "score", label: "Score", width: "15vw", align: "center" as const },
+    { key: "student", label: "Student", width: "15vw" },
+    { key: "time", label: "Time", width: "15vw" },
+    { key: "score", label: "Score", width: "10vw", align: "center" as const },
     { key: "ip", label: "IP Address", width: "10vw" },
     { key: "actions", label: "Actions", width: "10vw" },
   ];
 
   // Columns for aggregated ALL view: Student + one column per exam title
+  // Load extra fields, settings, and exam config for ALL view
+  const extraFieldsQuery = useQuery<ExtraField[]>({
+    enabled: examId === ALL,
+    queryKey: ["admin", "extra-fields"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/extra-scores/fields");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to load fields");
+      const items = (j.items as ExtraField[]) || [];
+      return items.sort((a, b) => (a.hidden === b.hidden ? 0 : a.hidden ? 1 : -1) || (a.label || "").localeCompare(b.label || ""));
+    },
+  });
+  const settingsQuery = useQuery<AppSettings | null>({
+    enabled: examId === ALL,
+    queryKey: ["admin", "settings", "extra"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/settings");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to load settings");
+      return (j.item as any) || null;
+    },
+  });
+  // Exams used for pass calc (done only, include_in_pass flag)
+  const passExamsQuery = useQuery<{ id: string; title: string; include_in_pass: boolean }[]>({
+    enabled: examId === ALL,
+    queryKey: ["admin", "extra-exams", "pass"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/extra-scores/exams");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to load exams config");
+      const items = (j.items as any[]) || [];
+      return items.map((x) => ({ id: x.id, title: x.title, include_in_pass: x.include_in_pass !== false }));
+    },
+  });
+
+  // Build columns for ALL view: Student + each visible exam + extra fields (not hidden) + Final
   const columnsAll = useMemo(() => {
-    const exams = examsQuery.data ?? [];
+    const exams = visibleExams;
+    const extraCols = (extraFieldsQuery.data || []).filter((f) => !f.hidden).map((f) => ({ key: `extra_${f.key}`, label: f.label, align: "center" as const }));
     return [
-      { key: "student", label: "Student" },
+      { key: "student", label: "Student", width: "15vw" },
       ...exams.map((ex) => ({ key: `exam_${ex.id}`, label: ex.title, align: "center" as const })),
+      ...extraCols,
+      { key: "final", label: "Final", align: "center" as const },
     ];
-  }, [examsQuery.data]);
+  }, [visibleExams, extraFieldsQuery.data]);
+
+  // Load summaries (extras + overall) for students present in aggregated ALL rows using existing public API
+  const codesForAll = useMemo(() => {
+    const rows = allAttemptsQuery.data?.rows || [];
+    return Array.from(new Set((rows as any[]).map((r: any) => String(r.code || "")).filter((s) => s.length > 0)));
+  }, [allAttemptsQuery.data]);
+
+  const summariesQuery = useQuery<{ code: string; extras: Array<{ key: string; value: any }>; pass_summary: { overall_score: number | null; passed: boolean | null } }[]>({
+    enabled: examId === ALL && codesForAll.length > 0,
+    queryKey: ["admin", "summaries", codesForAll.join(",")],
+    queryFn: async () => {
+      const out: { code: string; extras: any[]; pass_summary: any }[] = [];
+      const batchSize = 10;
+      for (let i = 0; i < codesForAll.length; i += batchSize) {
+        const chunk = codesForAll.slice(i, i + batchSize);
+        const results = await Promise.all(
+          chunk.map(async (code) => {
+            const res = await fetch(`/api/public/summary?code=${encodeURIComponent(code)}`);
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) return { code, extras: [], pass_summary: { overall_score: null, passed: null } };
+            return { code, extras: (j?.extras as any[]) || [], pass_summary: (j?.pass_summary as any) || { overall_score: null, passed: null } };
+          })
+        );
+        out.push(...results);
+      }
+      return out;
+    },
+  });
+
+  // Memo helpers for ALL view
+  const extrasByCode = useMemo(() => {
+    const m = new Map<string, Record<string, any>>();
+    for (const it of (summariesQuery.data || [])) {
+      const obj: Record<string, any> = {};
+      for (const e of (it.extras || [])) obj[e.key] = (e as any).value;
+      m.set(it.code, obj);
+    }
+    return m;
+  }, [summariesQuery.data]);
+  const visibleExtraFields = useMemo(() => (extraFieldsQuery.data || []).filter((f) => !f.hidden), [extraFieldsQuery.data]);
+  const passExamIds = useMemo(() => (passExamsQuery.data || []).filter((e) => e.include_in_pass).map((e) => e.id), [passExamsQuery.data]);
+  const allRowsWithSummaries = useMemo(() => {
+    if (examId !== ALL) return [] as Array<any>;
+    const rows = (allAttemptsQuery.data?.rows || []) as Array<{ name: string; code: string | null; student_id: string | null; scores: Record<string, number | null> }>;
+    const summaryByCode = new Map<string, any>();
+    for (const it of (summariesQuery.data || [])) summaryByCode.set(it.code, it.pass_summary || { overall_score: null, passed: null });
+    return rows.map((r) => ({ ...r, summary: summaryByCode.get(r.code || "") || { overall_score: null, passed: null } }));
+  }, [examId, allAttemptsQuery.data, summariesQuery.data]);
+
+  // Filter ALL rows by name or code
+  const filteredAllRows = useMemo(() => {
+    const list = allRowsWithSummaries || [];
+    const term = allSearch.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((r: any) => {
+      const nm = String(r.name || '').toLowerCase();
+      const cd = String(r.code || '').toLowerCase();
+      return nm.includes(term) || cd.includes(term);
+    });
+  }, [allRowsWithSummaries, allSearch]);
+
+  // Count passed among currently filtered rows
+  const passCounts = useMemo(() => {
+    const list = filteredAllRows || [];
+    let passed = 0;
+    for (const r of list) {
+      if (r?.summary?.passed === true) passed++;
+    }
+    return { passed, total: list.length };
+  }, [filteredAllRows]);
 
   const renderCell = (attempt: Attempt, column: any) => {
     switch (column.key) {
       case "student":
-        return attempt.student_name || <span className="text-gray-400">Anonymous</span>;
+        return (
+          <div className="flex flex-col">
+            <span>{attempt.student_name || <span className="text-gray-400">Anonymous</span>}</span>
+            {attempt.code ? (
+              <span className="text-xs text-gray-500">{attempt.code}</span>
+            ) : null}
+          </div>
+        );
       case "time":
         return (
           <div className="text-sm">
@@ -409,7 +588,7 @@ export default function AdminResultsIndex() {
             (scoreVal as number) >= 80 ? 'text-green-600' :
             (scoreVal as number) >= 60 ? 'text-yellow-600' : 'text-red-600'
           }`}>
-            {scoreVal}%
+            {Number(scoreVal).toFixed(2)}%
             {suffix && (
               <span className="ml-1 font-normal text-gray-500">{suffix}</span>
             )}
@@ -470,24 +649,16 @@ export default function AdminResultsIndex() {
               <button
                 type="button"
                 onClick={() => setExamId(ALL)}
-                className={`px-3 py-2 rounded-lg border text-sm transition ${
-                  examId === ALL
-                    ? 'bg-blue-600 text-white border-blue-600 shadow'
-                    : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
-                }`}
+                className={`px-3 py-2 rounded-lg border text-sm transition ${examId === ALL ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}
               >
                 Select All
               </button>
-              {(examsQuery.data ?? []).map((exam) => (
+              {visibleExams.map((exam) => (
                 <button
                   key={exam.id}
                   type="button"
                   onClick={() => setExamId(exam.id)}
-                  className={`px-3 py-2 rounded-lg border text-sm transition ${
-                    examId === exam.id
-                      ? 'bg-blue-600 text-white border-blue-600 shadow'
-                      : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
-                  }`}
+                  className={`px-3 py-2 rounded-lg border text-sm transition ${examId === exam.id ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}
                 >
                   <span>{exam.title}</span>
                   {exam.status === 'published' && (
@@ -497,234 +668,111 @@ export default function AdminResultsIndex() {
                   )}
                 </button>
               ))}
-              {(!examsQuery.isLoading && (examsQuery.data ?? []).length === 0) && (
-                <span className="text-sm text-gray-500">No exams found</span>
-              )}
             </div>
           </div>
-          
-          {selectedExam && (
-            <div className="flex items-center gap-3">
-              <StatusBadge status={selectedExam.status as any} size="sm" />
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                {selectedExam.access_type}
-              </span>
-            </div>
-          )}
         </div>
-
-        {examId && examId !== ALL && (
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t">
-            <ActionButton
-              variant="secondary"
-              onClick={handleRegradeAll}
-              loading={regradingAll}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M5 19A9 9 0 0119 5" />
-                </svg>
-              }
-            >
-              Regrade All Attempts
-            </ActionButton>
-            <Link href={`/admin/results/analysis/${examId}`}>
-              <ActionButton
-                variant="secondary"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                }
-              >
-                View Analysis
-              </ActionButton>
-            </Link>
-            <ActionButton
-              variant="secondary"
-              onClick={handleExportCsv}
-              loading={exportingCsv}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              }
-            >
-              Export CSV
-            </ActionButton>
-            <ActionButton
-              variant="secondary"
-              onClick={handleExportXlsx}
-              loading={exportingXlsx}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              }
-            >
-              Export Excel
-            </ActionButton>
-          </div>
-        )}
-
-        {examId === ALL && (
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t">
-            <ActionButton
-              variant="secondary"
-              onClick={handleExportAllCsv}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              }
-            >
-              Export CSV (All)
-            </ActionButton>
-            <ActionButton
-              variant="secondary"
-              onClick={handleExportAllXlsx}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              }
-            >
-              Export Excel (All)
-            </ActionButton>
-          </div>
-        )}
       </ModernCard>
 
-      {/* Filters (single exam only) */}
-      {examId && examId !== ALL && (
+      {examId === ALL ? (
         <ModernCard>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Student Name
-              </label>
-              <SearchInput
-                placeholder="Filter by student name"
-                value={studentFilter}
-                onChange={setStudentFilter}
-                className="w-full"
-              />
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <SearchInput placeholder="Search by name or code..." value={allSearch} onChange={setAllSearch} />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Date
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sort by Score
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={scoreSort}
-                onChange={(e) => setScoreSort(e.target.value as any)}
-              >
-                <option value="none">None</option>
-                <option value="desc">Highest first</option>
-                <option value="asc">Lowest first</option>
-              </select>
-            </div>
-            
-            <div className="flex items-end">
-              <ActionButton
-                variant="secondary"
-                onClick={clearFilters}
-                className="w-full"
-              >
-                Clear Filters
-              </ActionButton>
+            <div className="flex items-end gap-2">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                Passed {passCounts.passed}/{passCounts.total}
+              </span>
+              <ActionButton variant="secondary" onClick={handleExportAllCsv}>Export CSV</ActionButton>
+              <ActionButton variant="secondary" onClick={handleExportAllXlsx}>Export XLSX</ActionButton>
             </div>
           </div>
-          
-          {(studentFilter || startDate || endDate) && (
-            <div className="mt-4 pt-4 border-t text-sm text-gray-600">
-              Showing {filteredAttempts.length} of {attemptsQuery.data?.length || 0} attempts
-            </div>
-          )}
-        </ModernCard>
-      )}
-
-      {/* Results Table */}
-      {!examId && (
-        <ModernCard>
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4">📊</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Exam</h3>
-            <p className="text-gray-600">Choose an exam from the buttons above to view student results</p>
-          </div>
-        </ModernCard>
-      )}
-
-      {examId && examId !== ALL && (
-        <ModernTable
-          columns={columns}
-          data={sortedAttempts}
-          renderCell={renderCell}
-          loading={attemptsQuery.isLoading}
-          emptyMessage={
-            attemptsQuery.data?.length === 0
-              ? "No attempts found for this exam"
-              : "No attempts match your current filters"
-          }
-        />
-      )}
-
-      {examId === ALL && (
-        <ModernTable
-          columns={columnsAll}
-          data={(allAttemptsQuery.data?.rows || []).map((r: any) => r)}
-          renderCell={(row: any, col: any) => {
-            if (col.key === 'student') return row.name;
-            if (col.key.startsWith('exam_')) {
-              const exId = col.key.slice(5);
-              const v = row.scores?.[exId];
-              return v == null ? '-' : (
-                <span className={`font-semibold ${
-                  v >= 80 ? 'text-green-600' : v >= 60 ? 'text-yellow-600' : 'text-red-600'
-                }`}>
-                  {Math.round(v * 100) / 100}%
-                </span>
+          <ModernTable
+            columns={columnsAll}
+            data={filteredAllRows}
+            renderCell={(row: any, col: any) => {
+              if (col.key === 'student') return (
+                <div className="flex flex-col">
+                  <span>{row.name}</span>
+                  {row.code ? <span className="text-xs text-gray-500">{row.code}</span> : null}
+                </div>
               );
-            }
-            return null;
-          }}
-          loading={allAttemptsQuery.isLoading}
-          emptyMessage={
-            allAttemptsQuery.data?.rows?.length ? undefined : 'No attempts found across exams'
-          }
-        />
-      )}
-
-      {examId && examId !== ALL && attemptsQuery.error && (
+              if (col.key.startsWith('exam_')) {
+                const exId = col.key.slice(5);
+                const v = row.scores?.[exId];
+                return v == null ? '-' : (
+                  <span className={`font-semibold ${v >= 80 ? 'text-green-600' : v >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {Number(v).toFixed(2)}%
+                  </span>
+                );
+              }
+              if (col.key.startsWith('extra_')) {
+                const k = col.key.slice(6);
+                const data = row.code ? (extrasByCode.get(row.code) || {}) : {};
+                const f = visibleExtraFields.find((x) => x.key === k);
+                const v = (data as any)?.[k];
+                if (!f) return v == null ? '-' : String(v);
+                if (f.type === 'boolean') {
+                  const truthy = v === true || String(v).toLowerCase() === 'true' || v === 1 || v === '1' || String(v).toLowerCase() === 'yes';
+                  return truthy ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span> : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">No</span>;
+                }
+                if (f.type === 'number') {
+                  const maxp = Number(f.max_points || 0);
+                  const n = Number(v);
+                  if (Number.isNaN(n)) return '-';
+                  if (maxp === 100) return `${Number(n).toFixed(2)}%`;
+                  return maxp > 0 ? `${Number(n).toFixed(2)}/${maxp}` : `${Number(n).toFixed(2)}`;
+                }
+                return v == null || String(v).trim() === '' ? '-' : String(v);
+              }
+              if (col.key === 'final') {
+                const sm = row.summary as { overall_score: number | null; passed: boolean | null } | undefined;
+                const val = sm?.overall_score;
+                const passed = sm?.passed;
+                if (val == null || passed == null) return '-';
+                return (
+                  <div className="flex flex-col items-center">
+                    <span className="font-semibold">{Number(val).toFixed(2)}%</span>
+                    <span className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {passed ? 'Pass' : 'Fail'}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            }}
+            loading={allAttemptsQuery.isLoading || extraFieldsQuery.isLoading || summariesQuery.isLoading || settingsQuery.isLoading || passExamsQuery.isLoading}
+            emptyMessage={filteredAllRows.length ? undefined : 'No attempts found across exams'}
+          />
+        </ModernCard>
+      ) : (
         <ModernCard>
-          <div className="text-center text-red-600">
-            <p className="font-semibold">Error loading attempts</p>
-            <p className="text-sm mt-1">{(attemptsQuery.error as any).message}</p>
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <SearchInput placeholder="Search student..." value={studentFilter} onChange={setStudentFilter} />
+            </div>
+            <div className="flex items-end gap-2">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Start date</label>
+                <input type="date" className="input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">End date</label>
+                <input type="date" className="input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+              <ActionButton variant="secondary" onClick={clearFilters}>Clear</ActionButton>
+              <ActionButton variant="secondary" onClick={handleExportCsv} loading={exportingCsv}>Export CSV</ActionButton>
+              <ActionButton variant="secondary" onClick={handleExportXlsx} loading={exportingXlsx}>Export XLSX</ActionButton>
+              <ActionButton variant="primary" onClick={handleRegradeAll} loading={regradingAll}>Regrade all</ActionButton>
+            </div>
           </div>
+          <ModernTable
+            columns={columns}
+            data={sortedAttempts}
+            renderCell={renderCell}
+            loading={attemptsQuery.isLoading}
+            emptyMessage={sortedAttempts.length ? undefined : 'No attempts found'}
+          />
         </ModernCard>
       )}
 
@@ -739,9 +787,7 @@ export default function AdminResultsIndex() {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Delete Attempt
-                </h3>
+                <h3 className="text-lg font-medium text-gray-900">Delete Attempt</h3>
               </div>
             </div>
             <div className="mb-4">

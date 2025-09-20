@@ -10,7 +10,11 @@ export async function examsGET(req: NextRequest) {
     const url = new URL(req.url);
     const q = url.searchParams.get("q");
 
-    let query = svc.from("exams").select("*" as const).order("start_time", { ascending: true, nullsFirst: true });
+    let query = svc
+      .from("exams")
+      .select("*" as const)
+      .in("status", ["published", "done"]) // limit to published and done
+      .order("start_time", { ascending: true, nullsFirst: true });
     if (q) query = query.ilike("title", `%${q}%`);
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

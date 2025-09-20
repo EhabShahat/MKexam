@@ -22,6 +22,7 @@ export async function extraScoresFieldsGET(req: NextRequest) {
   }
 }
 
+
 // POST /api/admin/extra-scores/fields
 export async function extraScoresFieldsPOST(req: NextRequest) {
   try {
