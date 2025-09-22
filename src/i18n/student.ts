@@ -152,6 +152,12 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     points: "Points:",
     home: "Home",
     results: "Results",
+    exams: "Exams",
+    browse_exams: "Browse available exams",
+    search_your_results: "Search your exam results",
+    public_id: "Public ID",
+    view_id_card: "View your ID card",
+    admin_access: "admin",
     
     // Multi-exam selection UI
     select_exam: "Exam Access",
@@ -305,6 +311,12 @@ const dict: Record<StudentLocale, Record<string, string>> = {
     points: "الدرجات:",
     home: "الصفحة الرئيسية",
     results: "النتائج",
+    exams: "الاختبارات",
+    browse_exams: "الامتحانات المتاحة",
+    search_your_results: "نتائج اختبارك",
+    public_id: "الكارت",
+    view_id_card: "عرض التid",
+    admin_access: "admin",
     
     // Multi-exam selection UI
     select_exam: "دخول الاختبار",

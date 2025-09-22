@@ -104,6 +104,30 @@ export async function attendanceScanPOST(req: NextRequest) {
   }
 }
 
+// Return today's attendance count (UTC day)
+export async function attendanceTodayCountGET(req: NextRequest) {
+  try {
+    await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+
+    const todayUTC = startOfUTCDate(new Date());
+    const todayISODate = todayUTC.toISOString().slice(0, 10);
+
+    const { count, error } = await svc
+      .from("attendance_records")
+      .select("id", { count: "exact", head: true })
+      .eq("session_date", todayISODate);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    return NextResponse.json({ date: todayISODate, count: count || 0 });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
 export async function attendanceRecentGET(req: NextRequest) {
   try {
     await requireAdmin(req);

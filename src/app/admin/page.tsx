@@ -65,6 +65,18 @@ export default function AdminHomePage() {
     },
   });
 
+  // Today's attendance count (for Scanner card)
+  const { data: attendanceToday, isLoading: loadingAttendanceToday } = useQuery({
+    queryKey: ["admin", "attendance", "today-count"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/attendance/today-count");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "Failed to load today's attendance count");
+      return j as { date: string; count: number };
+    },
+    refetchInterval: 30_000,
+  });
+
   const updateHomeButtonsMutation = useMutation({
     mutationFn: async (payload: Partial<{ exams: boolean | null; results: boolean | null }>) => {
       const res = await authFetch("/api/admin/system/home-buttons", {
@@ -102,6 +114,26 @@ export default function AdminHomePage() {
     },
     onError: (error: any) => {
       toast.error({ title: "Failed to set Disabled mode", message: error.message });
+    },
+  });
+
+  // Enable system back to normal (Exam) mode
+  const enableSystemMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch("/api/admin/system/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "exam" }),
+      });
+      if (!res.ok) throw new Error("Failed to enable system");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      toast.success({ title: "System Enabled", message: "Public access restored" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Failed to enable system", message: error.message });
     },
   });
 
@@ -321,21 +353,37 @@ export default function AdminHomePage() {
               </button>
             </div>
 
-            {/* Disable System action */}
-            <ActionButton
-              variant="danger"
-              size="sm"
-              onClick={() => setShowDisableModal(true)}
-              disabled={systemMode === 'disabled'}
-              className="shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636M5.636 18.364l12.728-12.728" />
-                </svg>
-              }
-            >
-              Disable System
-            </ActionButton>
+            {/* Disable/Enable System action */}
+            {systemMode === 'disabled' ? (
+              <ActionButton
+                variant="success"
+                size="sm"
+                onClick={() => enableSystemMutation.mutate()}
+                loading={enableSystemMutation.isPending}
+                className="shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                }
+              >
+                Enable System
+              </ActionButton>
+            ) : (
+              <ActionButton
+                variant="danger"
+                size="sm"
+                onClick={() => setShowDisableModal(true)}
+                className="shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                }
+              >
+                Disable System
+              </ActionButton>
+            )}
           </div>
         </div>
       </ModernCard>
@@ -355,14 +403,17 @@ export default function AdminHomePage() {
           color="blue"
         />
         <StatsCard 
-          title="Active Attempts" 
-          value={stats?.activeAttempts ?? 0} 
+          title="Open Scanner" 
+          value={attendanceToday?.count ?? 0} 
           icon={
-            <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg className="w-6 h-6 text-orange-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="3" y="3" width="6" height="6" rx="1" strokeWidth={2} />
+              <rect x="15" y="3" width="6" height="6" rx="1" strokeWidth={2} />
+              <rect x="3" y="15" width="6" height="6" rx="1" strokeWidth={2} />
+              <path strokeWidth={2} d="M15 15h2v2h-2zM19 11h2v2h-2zM19 15h2v6h-6v-2h4v-4zM11 19h2v2h-2z" />
             </svg>
           }
-          href="/admin/results"
+          href="/admin/scanner"
           color="orange"
         />
         <StatsCard 

@@ -52,15 +52,18 @@ interface PublicSettings {
   results_show_view_attempt?: boolean;
 }
 
-export default function PublicResultsPage({
-  initialSystemMode,
-  initialDisabledMessage,
-  skipModeFetch = !!initialSystemMode,
-}: {
-  initialSystemMode?: 'exam' | 'results' | 'disabled';
-  initialDisabledMessage?: string | null;
-  skipModeFetch?: boolean;
-} = {}) {
+export default function PublicResultsPage(props: any) {
+  const {
+    initialSystemMode,
+    initialDisabledMessage,
+    skipModeFetch: _skipModeFetch,
+  } = (props ?? {}) as {
+    initialSystemMode?: 'exam' | 'results' | 'disabled';
+    initialDisabledMessage?: string | null;
+    skipModeFetch?: boolean;
+  };
+  const skipModeFetch = _skipModeFetch ?? !!initialSystemMode;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [effectiveMode, setEffectiveMode] = useState<"name" | "code">("name");
   const [settings, setSettings] = useState<PublicSettings>({});
