@@ -77,6 +77,17 @@ export async function GET(req: NextRequest) {
       completedToday: completedTodayQuery.count || 0,
     };
 
+    // Get app settings (single row), default to enable_multi_exam: true when missing
+    let appSettings = { enable_multi_exam: true };
+    const appSettingsRes = await svc
+      .from("app_settings")
+      .select("enable_multi_exam")
+      .limit(1)
+      .maybeSingle();
+    if (!appSettingsRes.error && appSettingsRes.data) {
+      appSettings = { enable_multi_exam: !!(appSettingsRes.data as any).enable_multi_exam };
+    }
+
     // Set cache control headers to prevent aborted requests
     return new NextResponse(
       JSON.stringify({
@@ -84,6 +95,7 @@ export async function GET(req: NextRequest) {
         activeExam,
         stats,
         systemStatus,
+        appSettings,
       }),
       {
         status: 200,

@@ -26,6 +26,7 @@ export async function publicSettingsGET() {
             "thank_you_message_ar",
             "enable_name_search",
             "enable_code_search",
+            "results_show_view_attempt",
           ].join(", ")
         )
         .limit(1)

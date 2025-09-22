@@ -42,7 +42,7 @@ export default function LogoImage({
       {brandName && !imageLoading && (
         <div className="mt-3">
           <h1 className={`font-semibold text-[var(--foreground)] ${
-            size === "sm" ? "text-sm" : 
+            size === "sm" ? "text-md" : 
             size === "md" ? "text-lg" : 
             "text-xl"
           }`}>

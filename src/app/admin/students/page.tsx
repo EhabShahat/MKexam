@@ -1,15 +1,18 @@
 "use client";
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, Fragment } from "react";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
+import QRCode from "qrcode";
 
 interface Student {
   student_id: string;
   code: string;
   student_name: string | null;
   mobile_number: string | null;
+  mobile_number2?: string | null;
+  address?: string | null;
+  national_id?: string | null;
   student_created_at: string;
   total_exams_attempted?: number;
   completed_exams?: number;
@@ -38,6 +41,8 @@ export default function GlobalStudentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
+  // Modal state for showing ID card popup
+  const [idCardStudentId, setIdCardStudentId] = useState<string | null>(null);
   
   // Function to send WhatsApp message
   function sendWhatsApp(student: any) {
@@ -103,6 +108,11 @@ export default function GlobalStudentsPage() {
 
   const students = data ?? [];
 
+  const selectedStudent = useMemo(() => {
+    if (!idCardStudentId) return null;
+    return students.find((s) => s.student_id === idCardStudentId) || null;
+  }, [students, idCardStudentId]);
+
   // Fetch app settings to get WhatsApp template
   const { data: settingsData } = useQuery({
     queryKey: ["admin", "settings"],
@@ -118,10 +128,34 @@ export default function GlobalStudentsPage() {
     setSettings(settingsData);
   }, [settingsData]);
 
+  // Public settings for brand logo in ID Card
+  const { data: publicSettings } = useQuery({
+    queryKey: ["public", "settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/settings");
+      try {
+        const j = await res.json();
+        return j || {};
+      } catch {
+        return {} as any;
+      }
+    },
+  });
+
   // Clear action error when data changes
   useEffect(() => {
     setActionError(null);
   }, [students]);
+
+  // Allow closing modal with Escape key
+  useEffect(() => {
+    if (!idCardStudentId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIdCardStudentId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [idCardStudentId]);
 
 
 
@@ -131,7 +165,7 @@ export default function GlobalStudentsPage() {
     const term = q.trim().toLowerCase();
     if (!term) return students;
     return students.filter((s) =>
-      [s.student_name, s.mobile_number, s.code]
+      [s.student_name, s.mobile_number, s.mobile_number2, s.address, s.national_id, s.code]
         .map((v) => (v || "").toLowerCase())
         .some((v) => v.includes(term))
     );
@@ -140,6 +174,9 @@ export default function GlobalStudentsPage() {
   // Add single student
   const [newName, setNewName] = useState("");
   const [newMobile, setNewMobile] = useState("");
+  const [newMobile2, setNewMobile2] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newNationalId, setNewNationalId] = useState("");
   const [newCode, setNewCode] = useState("");
   const addStudent = useMutation({
     mutationFn: async () => {
@@ -147,8 +184,12 @@ export default function GlobalStudentsPage() {
       const payload = { 
         student_name: newName || null, 
         mobile_number: newMobile || null, 
+        mobile_number2: newMobile2 || null,
+        address: newAddress || null,
+        national_id: newNationalId || null,
         code: newCode || undefined 
       };
+
       const res = await authFetch("/api/admin/students", { 
         method: "POST", 
         body: JSON.stringify(payload) 
@@ -160,7 +201,11 @@ export default function GlobalStudentsPage() {
     onSuccess: () => {
       setNewName("");
       setNewMobile("");
+      setNewMobile2("");
+      setNewAddress("");
+      setNewNationalId("");
       setNewCode("");
+
       setActionError(null);
       qc.invalidateQueries({ queryKey: ["admin", "students", "global"] });
     },
@@ -174,6 +219,8 @@ export default function GlobalStudentsPage() {
   function setEdit(id: string, patch: Partial<Student>) {
     setEdits((e) => ({ ...e, [id]: { ...(e[id] || {}), ...patch } }));
   }
+  // Expanded rows state for showing detailed editor/actions
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const saveRow = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
@@ -268,13 +315,16 @@ export default function GlobalStudentsPage() {
   }
 
   function mapRows(rows: any[][]) {
-    // header: student_name,mobile_number,code (optional)
+    // header: student_name,mobile_number,code,(optional) mobile_number2,address,national_id
     const [header, ...dataRows] = rows;
     if (!header) throw new Error("Empty file");
     const idx = (name: string) => header.findIndex((h: string) => String(h).trim().toLowerCase() === name);
     const ni = idx("student_name");
     const mi = idx("mobile_number");
     const ci = idx("code");
+    const m2i = idx("mobile_number2");
+    const ai = idx("address");
+    const nidi = idx("national_id");
     if (mi < 0) throw new Error("Missing header: mobile_number");
     const out = [] as any[];
     for (const r of dataRows) {
@@ -282,7 +332,10 @@ export default function GlobalStudentsPage() {
       const mobile_number = String(r[mi] ?? "").trim();
       if (!mobile_number) continue;
       const code = ci >= 0 ? String(r[ci] ?? "").trim() || undefined : undefined;
-      out.push({ student_name, mobile_number, code });
+      const mobile_number2 = m2i >= 0 ? String(r[m2i] ?? "").trim() || null : null;
+      const address = ai >= 0 ? String(r[ai] ?? "").trim() || null : null;
+      const national_id = nidi >= 0 ? String(r[nidi] ?? "").trim() || null : null;
+      out.push({ student_name, mobile_number, code, mobile_number2, address, national_id });
     }
     return out;
   }
@@ -394,7 +447,7 @@ export default function GlobalStudentsPage() {
             />
           </div>
           <div>
-            <label className="label">Import CSV/XLSX (student_name, mobile_number, code)</label>
+            <label className="label">Import CSV/XLSX (student_name, mobile_number, code, mobile_number2?, address?, national_id?)</label>
             <input 
               type="file" 
               accept=".csv,.xlsx,.xls" 
@@ -429,7 +482,7 @@ export default function GlobalStudentsPage() {
 
       <div className="card space-y-3">
         <h2 className="font-semibold">Add Student</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div>
             <label className="label">Name</label>
             <input 
@@ -444,6 +497,30 @@ export default function GlobalStudentsPage() {
               className="input" 
               value={newMobile} 
               onChange={(e) => setNewMobile(e.target.value)} 
+            />
+          </div>
+          <div>
+            <label className="label">Mobile 2</label>
+            <input 
+              className="input" 
+              value={newMobile2} 
+              onChange={(e) => setNewMobile2(e.target.value)} 
+            />
+          </div>
+          <div>
+            <label className="label">Address</label>
+            <input 
+              className="input" 
+              value={newAddress} 
+              onChange={(e) => setNewAddress(e.target.value)} 
+            />
+          </div>
+          <div>
+            <label className="label">National ID</label>
+            <input 
+              className="input" 
+              value={newNationalId} 
+              onChange={(e) => setNewNationalId(e.target.value)} 
             />
           </div>
           <div>
@@ -485,8 +562,6 @@ export default function GlobalStudentsPage() {
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attempts</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
@@ -494,7 +569,7 @@ export default function GlobalStudentsPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex flex-col items-center justify-center">
                     <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -509,107 +584,372 @@ export default function GlobalStudentsPage() {
                 const studentId = s.student_id;
                 const e = edits[studentId] || {};
                 return (
-                  <tr key={studentId} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono font-medium">{s.code}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input 
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                        value={e.student_name ?? s.student_name ?? ""}
-                        onChange={(ev) => setEdit(studentId, { student_name: ev.target.value })} 
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input 
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                        value={e.mobile_number ?? s.mobile_number ?? ""}
-                        onChange={(ev) => setEdit(studentId, { mobile_number: ev.target.value })} 
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" title="Total attempted">{s.total_exams_attempted || 0}</span>
-                        <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-sm font-medium" title="Completed">{s.completed_exams || 0}</span>
-                        <span className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium" title="In progress">{s.in_progress_exams || 0}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <svg className="w-4 h-4 text-gray-400 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        {new Date(s.student_created_at).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50" 
-                          onClick={() => {
-                            const payload = edits[studentId] || {};
-                            if (Object.keys(payload).length > 0) {
-                              saveRow.mutate({ id: studentId, payload });
-                            }
-                          }}
-                          disabled={saveRow.isPending || !edits[studentId] || Object.keys(edits[studentId]).length === 0}
-                        >
-                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <Fragment key={studentId}>
+                    <tr key={studentId} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono font-medium">{s.code}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="font-medium">{s.student_name || "-"}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 text-gray-400 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          {saveRow.isPending ? "Saving..." : "Save"}
-                        </button>
-                        <button 
-                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50" 
-                          onClick={() => {
-                            const total = s.total_exams_attempted || 0;
-                            if (total === 0) return;
-                            if (confirm(`Reset attempts for student ${s.code}? This removes per-exam attempt links so they can retake. Historical submissions remain.`)) {
-                              resetAttempts.mutate({ id: studentId });
-                            }
-                          }}
-                          disabled={resetAttempts.isPending || (s.total_exams_attempted || 0) === 0}
-                          title={(s.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
-                        >
-                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9H4m0 0V4m0 5a8.003 8.003 0 0015.356 2H20" />
-                          </svg>
-                          {resetAttempts.isPending ? "Resetting..." : "Reset Attempts"}
-                        </button>
-                        <button 
-                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50" 
-                          onClick={() => { 
-                            if (confirm(`Delete student ${s.code}? This will PERMANENTLY delete all their attempts, results, activity logs and extra scores. This cannot be undone.`)) {
-                              deleteRow.mutate(studentId); 
-                            }
-                          }}
-                          disabled={deleteRow.isPending}
-                        >
-                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          {deleteRow.isPending ? "Deleting..." : "Delete"}
-                        </button>
-                        <button
-                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                          onClick={() => sendWhatsApp(s)}
-                          disabled={!s.mobile_number}
-                          title={s.mobile_number ? "Send code via WhatsApp" : "No mobile number"}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                          </svg>
-                          WhatsApp
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                          {new Date(s.student_created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                            onClick={() => sendWhatsApp(s)}
+                            disabled={!s.mobile_number}
+                            title={s.mobile_number ? "Send code via WhatsApp" : "No mobile number"}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                            WhatsApp
+                          </button>
+                          <button
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
+                            onClick={() => {
+                              setIdCardStudentId(studentId);
+                            }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
+                              <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 4v-4H5a2 2 0 0 1-2-2V5zm2 0v10h14V5H5zm2 2h6v2H7V7zm0 4h10v2H7v-2z"/>
+                            </svg>
+                            ID Card
+                          </button>
+                          <button
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            onClick={() => setExpanded((prev) => ({ ...prev, [studentId]: !prev[studentId] }))}
+                          >
+                            {expanded[studentId] ? "Close" : "Edit"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded[studentId] && (
+                      <tr className="bg-gray-50/70">
+                        <td colSpan={4} className="px-6 py-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div>
+                              <label className="label">Name</label>
+                              <input
+                                className="input"
+                                value={e.student_name ?? s.student_name ?? ""}
+                                onChange={(ev) => setEdit(studentId, { student_name: ev.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label">Mobile</label>
+                              <input
+                                className="input"
+                                value={e.mobile_number ?? s.mobile_number ?? ""}
+                                onChange={(ev) => setEdit(studentId, { mobile_number: ev.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label">Mobile 2</label>
+                              <input
+                                className="input"
+                                value={e.mobile_number2 ?? s.mobile_number2 ?? ""}
+                                onChange={(ev) => setEdit(studentId, { mobile_number2: ev.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label">Address</label>
+                              <input
+                                className="input"
+                                value={e.address ?? s.address ?? ""}
+                                onChange={(ev) => setEdit(studentId, { address: ev.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="label">National ID</label>
+                              <input
+                                className="input"
+                                value={e.national_id ?? s.national_id ?? ""}
+                                onChange={(ev) => setEdit(studentId, { national_id: ev.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" title="Total attempted">{s.total_exams_attempted || 0}</span>
+                              <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-sm font-medium" title="Completed">{s.completed_exams || 0}</span>
+                              <span className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium" title="In progress">{s.in_progress_exams || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => {
+                                  const payload = edits[studentId] || {};
+                                  if (Object.keys(payload).length > 0) {
+                                    saveRow.mutate({ id: studentId, payload });
+                                  }
+                                }}
+                                disabled={saveRow.isPending || !edits[studentId] || Object.keys(edits[studentId]).length === 0}
+                              >
+                                {saveRow.isPending ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                className="btn bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={() => {
+                                  const total = s.total_exams_attempted || 0;
+                                  if (total === 0) return;
+                                  if (confirm(`Reset attempts for student ${s.code}? This removes per-exam attempt links so they can retake. Historical submissions remain.`)) {
+                                    resetAttempts.mutate({ id: studentId });
+                                  }
+                                }}
+                                disabled={resetAttempts.isPending || (s.total_exams_attempted || 0) === 0}
+                                title={(s.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
+                              >
+                                {resetAttempts.isPending ? "Resetting..." : "Reset Attempts"}
+                              </button>
+                              <button
+                                className="btn btn-destructive"
+                                onClick={() => {
+                                  if (confirm(`Delete student ${s.code}? This will PERMANENTLY delete all their attempts, results, activity logs and extra scores. This cannot be undone.`)) {
+                                    deleteRow.mutate(studentId);
+                                  }
+                                }}
+                                disabled={deleteRow.isPending}
+                              >
+                                {deleteRow.isPending ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}
           </tbody>
         </table>
       </div>
+      {/* ID Card Modal (inline, no iframe) */}
+      {idCardStudentId && selectedStudent && (
+        <IdCardModal
+          student={selectedStudent}
+          brandLogoUrl={(publicSettings as any)?.brand_logo_url}
+          onClose={() => setIdCardStudentId(null)}
+        />
+      )}
     </div>
   );
+}
+
+function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
+  student_id: string;
+  code: string;
+  student_name: string | null;
+}; brandLogoUrl?: string | null; onClose: () => void }) {
+  const cardRef = useRef<HTMLCanvasElement | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const fullName = student?.student_name || "";
+  const code = student?.code || "";
+
+  const card = {
+    // Internal canvas resolution in pixels (kept numeric)
+    width: 720,
+    height: 960,
+    padding: 40,
+    bg: [
+      { color: "#0b2844", y: 0 },
+      { color: "#1b2b5a", y: 0.5 },
+      { color: "#28194b", y: 1 },
+    ],
+  } as const;
+
+  useEffect(() => {
+    let disposed = false;
+    async function draw() {
+      if (!cardRef.current) return;
+      const canvas = cardRef.current;
+      // Internal buffer size (sharpness)
+      canvas.width = card.width;
+      canvas.height = card.height;
+      // Display size (responsive CSS) — avoids TS error from using vw/vh as numbers
+      canvas.style.width = "90vw";
+      canvas.style.height = "60vh";
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, card.height);
+      card.bg.forEach((stop) => grad.addColorStop(stop.y, stop.color));
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, card.width, card.height);
+
+      // Decorative stars
+      ctx.globalAlpha = 0.15;
+      for (let i = 0; i < 120; i++) {
+        const x = Math.random() * card.width;
+        const y = Math.random() * card.height;
+        const r = Math.random() * 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // QR content
+      const qrText = code || "";
+
+      // Offscreen QR canvas
+      const qrSize = 420;
+      const off = document.createElement("canvas");
+      off.width = qrSize;
+      off.height = qrSize;
+      await QRCode.toCanvas(off, qrText || "", {
+        errorCorrectionLevel: "H",
+        margin: 1,
+        scale: 8,
+        color: { dark: "#0b0b0b", light: "#ffffff" },
+      });
+
+      // Rounded rectangle container (transparent fill per latest design)
+      const qrContainerW = qrSize + 20;
+      const qrContainerH = qrSize + 20;
+      const qrContainerX = (card.width - qrContainerW) / 2;
+      const qrContainerY = 180;  //################## qrcode y position (top space) ##################
+      roundRect(ctx, qrContainerX, qrContainerY, qrContainerW, qrContainerH, 28);
+      ctx.fillStyle = "rgba(255,255,255,.8)";
+      ctx.fill();
+
+      // Draw QR centered inside container
+      const qrX = (card.width - qrSize) / 2;
+      const qrY = qrContainerY + (qrContainerH - qrSize) / 2;
+      ctx.drawImage(off, qrX, qrY, qrSize, qrSize);
+
+      // Center logo over QR
+      if (brandLogoUrl) {
+        try {
+          const img = await loadImage(brandLogoUrl);
+          if (!disposed) {
+            const logoR = Math.floor(qrSize * 0.16);
+            const cx = card.width / 2;
+            const cy = qrY + qrSize / 2;
+            ctx.save();
+            // white circle backdrop
+            ctx.beginPath();
+            ctx.arc(cx, cy, logoR + 10, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+            ctx.closePath();
+            // draw logo clipped to circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, logoR, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, cx - logoR, cy - logoR, logoR * 2, logoR * 2.5);
+            ctx.restore();
+          }
+        } catch {}
+      }
+
+      // Name text
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 40px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.textAlign = "center";
+      ctx.fillText(fullName || " ", card.width / 2, qrContainerY + qrContainerH + 80);
+
+      // Code text
+      ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.fillStyle = "#d6e1ff";
+      ctx.fillText(code || " ", card.width / 2, qrContainerY + qrContainerH + 140);
+
+      setReady(true);
+    }
+    draw();
+    return () => { disposed = true; };
+  }, [brandLogoUrl, fullName, code]);
+
+  const download = () => {
+    if (!cardRef.current) return;
+    const url = cardRef.current.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(fullName || "student").replace(/\s+/g, "_")}_${code || "id"}.png`;
+    a.click();
+  };
+
+  const printCard = () => {
+    if (!cardRef.current) return;
+    const dataUrl = cardRef.current.toDataURL("image/png");
+    const w = window.open("");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>ID Card</title><style>
+      html,body{margin:0;padding:0}
+      .wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111}
+      img{max-width:100%;height:auto;}
+      @media print { .noprint{display:none} }
+    </style></head><body><div class="wrap"><img src="${dataUrl}"/></div></body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
+  // modal UI
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Student ID Card"
+        className="relative bg-white rounded-lg shadow-xl w-[95vw] max-w-[860px] h-[90vh] flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
+          <h3 className="text-sm font-semibold">Student ID Card</h3>
+          <div className="flex items-center gap-2">
+            <button className="btn" onClick={download} disabled={!ready}>Download PNG</button>
+            <button className="btn btn-primary" onClick={printCard} disabled={!ready}>Print</button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-gray-200 focus:outline-none"
+              aria-label="Close"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <canvas ref={cardRef} className="rounded-xl shadow-2xl border border-gray-200" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }

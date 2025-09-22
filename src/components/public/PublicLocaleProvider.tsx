@@ -15,14 +15,9 @@ export function useStudentLocale(): Ctx {
 }
 
 export default function PublicLocaleProvider({ children }: { children: React.ReactNode }) {
-  // Initialize from SSR-provided <html lang> to avoid client flip from en->ar on mount
-  const [locale, setLocale] = useState<StudentLocale>(() => {
-    if (typeof document !== "undefined") {
-      const lang = document.documentElement.getAttribute("lang");
-      return lang === "ar" ? "ar" : "en";
-    }
-    return "en";
-  });
+  // IMPORTANT: Use a stable initial value that matches SSR ('en') to avoid hydration mismatch.
+  // We'll resolve and switch locale on the client after hydration.
+  const [locale, setLocale] = useState<StudentLocale>("en");
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +41,9 @@ export default function PublicLocaleProvider({ children }: { children: React.Rea
 
   return (
     <LocaleCtx.Provider value={value}>
-      <div dir={dir} lang={locale}>{children}</div>
+      <div dir={dir} lang={locale} suppressHydrationWarning>
+        {children}
+      </div>
     </LocaleCtx.Provider>
   );
 }

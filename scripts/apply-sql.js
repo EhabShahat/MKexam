@@ -29,6 +29,7 @@ const { loadEnv } = require('./utils/load-env');
         path.join(root, 'db', 'rpc_functions.sql'),
         path.join(root, 'db', 'extra_scores.sql'),
         path.join(root, 'db', 'exam_public_config.sql'),
+        path.join(root, 'db', 'attendance.sql'),
         path.join(root, 'db', 'indexes.sql'),
       ];
 

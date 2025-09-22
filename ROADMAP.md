@@ -216,6 +216,9 @@ All major features have been implemented and tested:
 - [ ] Mobile app development
 - [ ] API documentation for third-party integrations
 
+## Feature Notes
+- Keep standalone ID card route `/admin/students/[studentId]/id-card` for future features: qrcode, search, public, main screen, id, public id
+
 ---
 
 **Note**: This roadmap reflects the current state as of August 2025. The application is fully functional and ready for production deployment.

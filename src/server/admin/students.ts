@@ -22,6 +22,24 @@ export async function studentsGET(req: NextRequest) {
   }
 }
 
+export async function studentsIdGET(req: NextRequest, studentId: string) {
+  try {
+    await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+    const { data, error } = await svc
+      .from("student_exam_summary")
+      .select("*")
+      .eq("student_id", studentId)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!data) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return NextResponse.json({ student: data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
 export async function studentsPOST(req: NextRequest) {
   try {
     await requireAdmin(req);
@@ -29,7 +47,7 @@ export async function studentsPOST(req: NextRequest) {
     const svc = supabaseServer(token || undefined);
     const body = await req.json().catch(() => ({}));
 
-    const { student_name, mobile_number, code } = body as any;
+    const { student_name, mobile_number, mobile_number2, address, national_id, code } = body as any;
 
     let finalCode: string | null = code || null;
     if (!finalCode) {
@@ -61,6 +79,9 @@ export async function studentsPOST(req: NextRequest) {
         code: finalCode,
         student_name: student_name || null,
         mobile_number: mobile_number || null,
+        mobile_number2: mobile_number2 || null,
+        address: address || null,
+        national_id: national_id || null,
       })
       .select("*")
       .single();
@@ -80,10 +101,13 @@ export async function studentsIdPATCH(req: NextRequest, studentId: string) {
     const svc = supabaseServer(token || undefined);
     const body = await req.json().catch(() => ({}));
 
-    const { student_name, mobile_number } = body as any;
+    const { student_name, mobile_number, mobile_number2, address, national_id } = body as any;
     const update: any = {};
     if (student_name !== undefined) update.student_name = student_name || null;
     if (mobile_number !== undefined) update.mobile_number = mobile_number || null;
+    if (mobile_number2 !== undefined) update.mobile_number2 = mobile_number2 || null;
+    if (address !== undefined) update.address = address || null;
+    if (national_id !== undefined) update.national_id = national_id || null;
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
@@ -175,7 +199,7 @@ export async function studentsBulkPOST(req: NextRequest) {
 
     for (let i = 0; i < students.length; i++) {
       const student = students[i] as any;
-      const { student_name, mobile_number, code } = student;
+      const { student_name, mobile_number, mobile_number2, address, national_id, code } = student;
       if (!mobile_number) {
         errors.push(`Row ${i + 1}: Mobile number is required`);
         continue;
@@ -197,7 +221,14 @@ export async function studentsBulkPOST(req: NextRequest) {
         continue;
       }
       existingCodeSet.add(finalCode);
-      toInsert.push({ code: finalCode, student_name: student_name || null, mobile_number });
+      toInsert.push({ 
+        code: finalCode, 
+        student_name: student_name || null, 
+        mobile_number,
+        mobile_number2: mobile_number2 || null,
+        address: address || null,
+        national_id: national_id || null,
+      });
     }
 
     if (errors.length > 0) {
@@ -250,9 +281,9 @@ export async function studentsWhatsappPOST(req: NextRequest) {
 
     const { data: students, error: studentsError } = await svc
       .from("students")
-      .select("id, code, student_name, mobile_number")
+      .select("id, code, student_name, mobile_number, mobile_number2")
       .in("id", studentIds)
-      .not("mobile_number", "is", null);
+      .or("mobile_number.is.not.null,mobile_number2.is.not.null");
     if (studentsError) return NextResponse.json({ error: studentsError.message }, { status: 400 });
     if (!students || students.length === 0) {
       return NextResponse.json({ error: "No students found with mobile numbers" }, { status: 400 });
@@ -263,12 +294,15 @@ export async function studentsWhatsappPOST(req: NextRequest) {
         .replace(/\{code\}/g, student.code || "")
         .replace(/\{name\}/g, student.student_name || "");
       const encodedMessage = encodeURIComponent(personalizedMessage);
-      const whatsappUrl = `https://wa.me/${student.mobile_number}?text=${encodedMessage}`;
+      const urls: string[] = [];
+      if (student.mobile_number) urls.push(`https://wa.me/${student.mobile_number}?text=${encodedMessage}`);
+      if (student.mobile_number2) urls.push(`https://wa.me/${student.mobile_number2}?text=${encodedMessage}`);
       return {
         student_id: student.id,
         student_name: student.student_name,
         mobile_number: student.mobile_number,
-        whatsapp_url: whatsappUrl,
+        mobile_number2: student.mobile_number2,
+        whatsapp_urls: urls,
         message: personalizedMessage,
       };
     });

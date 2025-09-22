@@ -55,6 +55,35 @@ export default function AdminHomePage() {
     },
   });
 
+  // Home buttons visibility (controls Exams/Results buttons on main page)
+  const { data: homeButtons, isLoading: loadingHomeButtons } = useQuery({
+    queryKey: ["admin", "homeButtons"],
+    queryFn: async () => {
+      const res = await authFetch("/api/admin/system/home-buttons");
+      if (!res.ok) throw new Error("Failed to load Home Buttons visibility");
+      return res.json() as Promise<{ exams: boolean | null; results: boolean | null }>;
+    },
+  });
+
+  const updateHomeButtonsMutation = useMutation({
+    mutationFn: async (payload: Partial<{ exams: boolean | null; results: boolean | null }>) => {
+      const res = await authFetch("/api/admin/system/home-buttons", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to update Home Buttons visibility");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "homeButtons"] });
+      toast.success({ title: "Updated", message: "Home page buttons updated" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Update failed", message: error.message });
+    },
+  });
+
   const disableSystemMutation = useMutation({
     mutationFn: async ({ message }: { message: string }) => {
       const res = await authFetch("/api/admin/system/mode", {
@@ -76,24 +105,7 @@ export default function AdminHomePage() {
     },
   });
 
-  const enableSystemMutation = useMutation({
-    mutationFn: async () => {
-      const res = await authFetch("/api/admin/system/mode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "exam" }),
-      });
-      if (!res.ok) throw new Error("Failed to switch to Exam mode");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-      toast.success({ title: "Exam mode", message: "Students can access published exams" });
-    },
-    onError: (error: any) => {
-      toast.error({ title: "Failed to switch to Exam mode", message: error.message });
-    },
-  });
+  // Removed old Exam/Results mode mutations; visibility is controlled via home-buttons API
 
   const publishExamMutation = useMutation({
     mutationFn: async (examId: string) => {
@@ -146,24 +158,7 @@ export default function AdminHomePage() {
     },
   });
 
-  const resultsModeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await authFetch("/api/admin/system/mode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "results" }),
-      });
-      if (!res.ok) throw new Error("Failed to switch to Results mode");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-      toast.success({ title: "Results mode", message: "Public will be redirected to results" });
-    },
-    onError: (error: any) => {
-      toast.error({ title: "Failed to switch to Results mode", message: error.message });
-    },
-  });
+  // (Results mode mutation removed)
 
   const exams = data?.exams ?? [];
   const activeExam = data?.activeExam;
@@ -171,6 +166,17 @@ export default function AdminHomePage() {
   const systemStatus = data?.systemStatus;
   const appSettings = data?.appSettings;
   const systemMode: 'exam' | 'results' | 'disabled' = (systemStatus?.mode as any) ?? (systemStatus?.isDisabled ? 'disabled' : 'exam');
+
+  // Current visibility states
+  // If explicit keys exist (true/false), use them. Otherwise fall back to systemMode
+  const examsVisible =
+    homeButtons?.exams !== null && homeButtons?.exams !== undefined
+      ? !!homeButtons?.exams
+      : systemMode === 'exam';
+  const resultsVisible =
+    homeButtons?.results !== null && homeButtons?.results !== undefined
+      ? !!homeButtons?.results
+      : systemMode === 'results';
 
   // Filter exams based on selected filter
   const filteredExams = examFilter === 'all' ? exams : exams.filter(exam => exam.status === examFilter);
@@ -266,46 +272,56 @@ export default function AdminHomePage() {
             <div>
               <h3 className="font-semibold text-gray-900 text-lg">System Status</h3>
               <p className="text-sm text-gray-600 mt-1">
-                {systemMode === 'disabled' 
-                  ? `Disabled: ${systemStatus?.disableMessage || 'No exams available to students'}` 
-                  : systemMode === 'results' 
-                    ? 'Results Mode - Public sees the results page'
-                    : 'Exam Mode - Students can access published exams'
-                }
+                {systemMode === 'disabled'
+                  ? `Disabled: ${systemStatus?.disableMessage || 'No exams available to students'}`
+                  : `Home Page · Exams: ${examsVisible ? 'Visible' : 'Hidden'} • Results: ${resultsVisible ? 'Visible' : 'Hidden'}`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ActionButton
-              variant="success"
-              size="sm"
-              onClick={() => enableSystemMutation.mutate()}
-              loading={enableSystemMutation.isPending}
-              disabled={systemMode === 'exam'}
-              className="shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              }
-            >
-              Exam Mode
-            </ActionButton>
-            <ActionButton
-              variant="secondary"
-              size="sm"
-              onClick={() => resultsModeMutation.mutate()}
-              loading={resultsModeMutation.isPending}
-              disabled={systemMode === 'results'}
-              className="shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
-                </svg>
-              }
-            >
-              Results Mode
-            </ActionButton>
+          <div className="flex items-center gap-6">
+            {/* Exams button visibility toggle */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-800">Exams Button</span>
+              <button
+                type="button"
+                aria-pressed={examsVisible}
+                onClick={() => updateHomeButtonsMutation.mutate({ exams: !examsVisible })}
+                disabled={loadingHomeButtons || updateHomeButtonsMutation.isPending}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  examsVisible ? 'bg-emerald-500' : 'bg-gray-300'
+                } ${(loadingHomeButtons || updateHomeButtonsMutation.isPending) ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'}`}
+                title={examsVisible ? 'Hide Exams button on home page' : 'Show Exams button on home page'}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                    examsVisible ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Results button visibility toggle */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-800">Results Button</span>
+              <button
+                type="button"
+                aria-pressed={resultsVisible}
+                onClick={() => updateHomeButtonsMutation.mutate({ results: !resultsVisible })}
+                disabled={loadingHomeButtons || updateHomeButtonsMutation.isPending}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  resultsVisible ? 'bg-indigo-500' : 'bg-gray-300'
+                } ${(loadingHomeButtons || updateHomeButtonsMutation.isPending) ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'}`}
+                title={resultsVisible ? 'Hide Results button on home page' : 'Show Results button on home page'}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                    resultsVisible ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Disable System action */}
             <ActionButton
               variant="danger"
               size="sm"
@@ -323,6 +339,7 @@ export default function AdminHomePage() {
           </div>
         </div>
       </ModernCard>
+
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -564,8 +581,8 @@ export default function AdminHomePage() {
             { key: 'all', label: 'All', count: exams.length },
             { key: 'draft', label: 'Draft', count: exams.filter(e => e.status === 'draft').length },
             { key: 'published', label: 'Published', count: exams.filter(e => e.status === 'published').length },
-            { key: 'archived', label: 'Archived', count: exams.filter(e => e.status === 'archived').length },
             { key: 'done', label: 'Done', count: exams.filter(e => e.status === 'done').length },
+            { key: 'archived', label: 'Archived', count: exams.filter(e => e.status === 'archived').length },            
           ].map(({ key, label, count }) => (
             <button
               key={key}

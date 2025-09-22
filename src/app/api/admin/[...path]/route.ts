@@ -35,8 +35,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         return mod.adminsGET(req);
       }
       case "students": {
+        const id = sub;
         const mod = await import("@/server/admin/students");
-        return mod.studentsGET(req);
+        if (!id) return mod.studentsGET(req);
+        // GET /students/:id
+        return mod.studentsIdGET(req, id);
       }
       case "attempts": {
         const id = sub;
@@ -55,6 +58,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         if (sub === "fields") return mod.extraScoresFieldsGET(req);
         if (sub === "exams") return mod.extraScoresExamsGET(req);
         return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+      case "summaries": {
+        const mod = await import("@/server/admin/summaries");
+        return mod.adminSummariesGET(req);
       }
       case "exams": {
         const id = sub;

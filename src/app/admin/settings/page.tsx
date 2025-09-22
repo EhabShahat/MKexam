@@ -25,6 +25,7 @@ type AppSettings = {
   code_length?: number;
   code_format?: "numeric" | "alphabetic" | "alphanumeric" | "custom";
   code_pattern?: string | null;
+  results_show_view_attempt?: boolean;
 };
 
 type Admin = {
@@ -362,6 +363,26 @@ export default function AdminSettingsPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Public Results — View Attempt Button */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-3">Public Results</label>
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="pr-4">
+                      <div className="font-semibold text-slate-800">Show "View Attempt" Button</div>
+                      <div className="text-sm text-slate-600">Allow students to open their attempt (with answers) on the public results page. Only available after code verification and when the exam is finished.</div>
+                    </div>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        checked={settings.results_show_view_attempt !== false}
+                        onChange={(e) => updateSetting("results_show_view_attempt", e.target.checked)}
+                      />
+                      <span className="text-sm text-slate-700">{settings.results_show_view_attempt !== false ? "Enabled" : "Disabled"}</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -662,8 +683,8 @@ export default function AdminSettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {admins.map((admin) => (
-                          <tr key={admin.id} className="hover:bg-gray-50">
+                        {admins.map((admin, idx) => (
+                          <tr key={(admin as any).id || (admin as any).email || (admin as any).username || idx} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
                               <div className="font-medium text-gray-900">
                                 {admin.username || admin.raw_user_meta_data?.username || 'N/A'}

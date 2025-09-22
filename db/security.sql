@@ -55,6 +55,24 @@ BEGIN
   EXECUTE 'CREATE POLICY app_settings_admin_read ON public.app_settings FOR SELECT USING (public.is_admin())';
 END $do$;
 
+-- Recreate summary view to include extended fields
+CREATE OR REPLACE VIEW public.student_exam_summary WITH (security_invoker = true) AS
+  SELECT
+    s.id AS student_id,
+    s.code,
+    s.student_name,
+    s.mobile_number,
+    s.mobile_number2,
+    s.address,
+    s.national_id,
+    COUNT(sea.id) AS total_exams_attempted,
+    COUNT(CASE WHEN sea.status = 'completed' THEN 1 END) AS completed_exams,
+    COUNT(CASE WHEN sea.status = 'in_progress' THEN 1 END) AS in_progress_exams,
+    s.created_at AS student_created_at
+  FROM public.students s
+  LEFT JOIN public.student_exam_attempts sea ON sea.student_id = s.id
+  GROUP BY s.id, s.code, s.student_name, s.mobile_number, s.mobile_number2, s.address, s.national_id, s.created_at;
+
 -- Create/replace admin-only write policy using public.is_admin()
 DO $do$
 BEGIN
@@ -84,6 +102,28 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+
+-- Ensure extended student profile columns exist (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'students' AND column_name = 'mobile_number2'
+  ) THEN
+    ALTER TABLE public.students ADD COLUMN mobile_number2 text NULL;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'students' AND column_name = 'address'
+  ) THEN
+    ALTER TABLE public.students ADD COLUMN address text NULL;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'students' AND column_name = 'national_id'
+  ) THEN
+    ALTER TABLE public.students ADD COLUMN national_id text NULL;
+  END IF;
+END $$;
 ALTER TABLE public.student_exam_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
 

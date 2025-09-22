@@ -33,6 +33,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ path?: 
         const mod = await import("@/server/public/publicSettings");
         return mod.publicSettingsGET();
       }
+      case "review": {
+        const mod = await import("@/server/public/review");
+        return mod.reviewGET(request as any);
+      }
       case "summary": {
         const mod = await import("@/server/public/summary");
         return mod.summaryGET(request as any);

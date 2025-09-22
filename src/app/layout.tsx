@@ -124,6 +124,25 @@ export default async function RootLayout({
               };
             }
             
+            // Polyfill for navigator.mediaDevices.getUserMedia (older browsers)
+            try {
+              if (typeof navigator !== 'undefined') {
+                if (!navigator.mediaDevices) {
+                  navigator.mediaDevices = {};
+                }
+                if (!navigator.mediaDevices.getUserMedia) {
+                  var legacyGetUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                  if (legacyGetUserMedia) {
+                    navigator.mediaDevices.getUserMedia = function(constraints) {
+                      return new Promise(function(resolve, reject) {
+                        legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+                      });
+                    };
+                  }
+                }
+              }
+            } catch (e) { /* noop */ }
+            
             // Browser-specific fixes moved to CSS to avoid hydration mismatch
             // These fixes are now handled via CSS classes and media queries
             

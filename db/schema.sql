@@ -196,6 +196,28 @@ create table if not exists public.students (
   created_at timestamptz not null default now()
 );
 
+-- Add extended student profile columns (idempotent)
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'students' and column_name = 'mobile_number2'
+  ) then
+    alter table public.students add column mobile_number2 text null;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'students' and column_name = 'address'
+  ) then
+    alter table public.students add column address text null;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'students' and column_name = 'national_id'
+  ) then
+    alter table public.students add column national_id text null;
+  end if;
+end $$;
+
 -- Per-exam attempt tracking for students
 create table if not exists public.student_exam_attempts (
   id uuid primary key default gen_random_uuid(),
@@ -248,13 +270,16 @@ create or replace view public.student_exam_summary with (security_invoker = true
     s.code,
     s.student_name,
     s.mobile_number,
+    s.mobile_number2,
+    s.address,
+    s.national_id,
     count(sea.id) as total_exams_attempted,
     count(case when sea.status = 'completed' then 1 end) as completed_exams,
     count(case when sea.status = 'in_progress' then 1 end) as in_progress_exams,
     s.created_at as student_created_at
   from public.students s
   left join public.student_exam_attempts sea on sea.student_id = s.id
-  group by s.id, s.code, s.student_name, s.mobile_number, s.created_at;
+  group by s.id, s.code, s.student_name, s.mobile_number, s.mobile_number2, s.address, s.national_id, s.created_at;
 
 create table if not exists public.app_config (
   key text primary key,

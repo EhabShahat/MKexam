@@ -64,6 +64,7 @@ export default function AdminResultsIndex() {
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const [regradingAll, setRegradingAll] = useState(false);
   const [scoreSort, setScoreSort] = useState<"none" | "asc" | "desc">("none");
+  const [allScoreSort, setAllScoreSort] = useState<"none" | "finalAsc" | "finalDesc">("none");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   
@@ -487,18 +488,14 @@ export default function AdminResultsIndex() {
     queryKey: ["admin", "summaries", codesForAll.join(",")],
     queryFn: async () => {
       const out: { code: string; extras: any[]; pass_summary: any }[] = [];
-      const batchSize = 10;
+      const batchSize = 200;
       for (let i = 0; i < codesForAll.length; i += batchSize) {
         const chunk = codesForAll.slice(i, i + batchSize);
-        const results = await Promise.all(
-          chunk.map(async (code) => {
-            const res = await fetch(`/api/public/summary?code=${encodeURIComponent(code)}`);
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok) return { code, extras: [], pass_summary: { overall_score: null, passed: null } };
-            return { code, extras: (j?.extras as any[]) || [], pass_summary: (j?.pass_summary as any) || { overall_score: null, passed: null } };
-          })
-        );
-        out.push(...results);
+        const url = `/api/admin/summaries?codes=${encodeURIComponent(chunk.join(","))}`;
+        const res = await authFetch(url);
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || "Failed to load summaries");
+        out.push(...(((j?.items as any[]) || []).map((x: any) => ({ code: x.code, extras: x.extras || [], pass_summary: x.pass_summary || { overall_score: null, passed: null } }))));
       }
       return out;
     },
@@ -535,6 +532,21 @@ export default function AdminResultsIndex() {
       return nm.includes(term) || cd.includes(term);
     });
   }, [allRowsWithSummaries, allSearch]);
+
+  // Sort ALL rows by final summary score when requested
+  const sortedAllRows = useMemo(() => {
+    const list = filteredAllRows.slice();
+    if (allScoreSort === "none") return list;
+    list.sort((a: any, b: any) => {
+      const av = a?.summary?.overall_score;
+      const bv = b?.summary?.overall_score;
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; // nulls last
+      if (bv == null) return -1;
+      return allScoreSort === "finalAsc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+    return list;
+  }, [filteredAllRows, allScoreSort]);
 
   // Count passed among currently filtered rows
   const passCounts = useMemo(() => {
@@ -683,13 +695,21 @@ export default function AdminResultsIndex() {
               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
                 Passed {passCounts.passed}/{passCounts.total}
               </span>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Sort</label>
+                <select className="input" value={allScoreSort} onChange={(e) => setAllScoreSort(e.target.value as any)}>
+                  <option value="none">None</option>
+                  <option value="finalDesc">Final: Highest first</option>
+                  <option value="finalAsc">Final: Lowest first</option>
+                </select>
+              </div>
               <ActionButton variant="secondary" onClick={handleExportAllCsv}>Export CSV</ActionButton>
               <ActionButton variant="secondary" onClick={handleExportAllXlsx}>Export XLSX</ActionButton>
             </div>
           </div>
           <ModernTable
             columns={columnsAll}
-            data={filteredAllRows}
+            data={sortedAllRows}
             renderCell={(row: any, col: any) => {
               if (col.key === 'student') return (
                 <div className="flex flex-col">
@@ -742,7 +762,7 @@ export default function AdminResultsIndex() {
               return null;
             }}
             loading={allAttemptsQuery.isLoading || extraFieldsQuery.isLoading || summariesQuery.isLoading || settingsQuery.isLoading || passExamsQuery.isLoading}
-            emptyMessage={filteredAllRows.length ? undefined : 'No attempts found across exams'}
+            emptyMessage={sortedAllRows.length ? undefined : 'No attempts found across exams'}
           />
         </ModernCard>
       ) : (
@@ -759,6 +779,14 @@ export default function AdminResultsIndex() {
               <div>
                 <label className="block text-xs text-gray-500 mb-1">End date</label>
                 <input type="date" className="input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Sort by score</label>
+                <select className="input" value={scoreSort} onChange={(e) => setScoreSort(e.target.value as any)}>
+                  <option value="none">None</option>
+                  <option value="desc">Highest first</option>
+                  <option value="asc">Lowest first</option>
+                </select>
               </div>
               <ActionButton variant="secondary" onClick={clearFilters}>Clear</ActionButton>
               <ActionButton variant="secondary" onClick={handleExportCsv} loading={exportingCsv}>Export CSV</ActionButton>

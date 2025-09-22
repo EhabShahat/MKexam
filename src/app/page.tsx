@@ -1,11 +1,8 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import PublicLocaleProvider from "@/components/public/PublicLocaleProvider";
-import PublicResultsPage from "./(public)/results/page";
-import MultiExamEntry from "@/components/public/MultiExamEntry";
+import BrandLogo from "@/components/BrandLogo";
 import Link from "next/link";
-import { resolveStudentLocale, getDir, type StudentLocale, t } from "@/i18n/student";
-import { getCodeFormatSettings } from "@/lib/codeGenerator";
-import { redirect } from "next/navigation";
+import { t } from "@/i18n/student";
 
 type MinimalExam = {
   id: string;
@@ -15,30 +12,28 @@ type MinimalExam = {
   access_type: "open" | "code_based" | "ip_restricted";
 };
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+ export const dynamic = "force-dynamic";
+ export const revalidate = 0;
 
-export default async function Home() {
-  console.log("🏠 Home page loading...");
-  
+ export default async function Home() {
   let svc;
   try {
     svc = supabaseServer();
-    console.log("✅ Supabase client created");
   } catch (error) {
-    console.error("❌ Failed to create Supabase client:", error);
     return <ErrorPage message="Database connection failed" />;
   }
 
-  // Read tri-state system mode from app_config
-  console.log("🧭 Checking system mode...");
-  const { data: cfg, error: cfgErr } = await svc
+  // Read system mode and optional home button toggles
+  const { data: cfg } = await svc
     .from("app_config")
     .select("key, value")
-    .in("key", ["system_mode", "system_disabled", "system_disabled_message"]);
-  if (cfgErr) {
-    console.warn("⚠️ Failed to read app_config, defaulting to exam mode:", cfgErr.message);
-  }
+    .in("key", [
+      "system_mode",
+      "system_disabled",
+      "system_disabled_message",
+      "home_button_exams",
+      "home_button_results",
+    ]);
 
   type AppConfigRow = { key: string; value: string | null };
   const cfgMap = new Map<string, string | null>();
@@ -48,204 +43,96 @@ export default async function Home() {
   }
   const legacyDisabled = cfgMap.get("system_disabled") === "true";
   const mode = (cfgMap.get("system_mode") as "exam" | "results" | "disabled" | undefined) || (legacyDisabled ? "disabled" : "exam");
-  console.log("🧭 System mode:", mode);
+  const disabledMessage = cfgMap.get("system_disabled_message") || null;
 
-  if (mode === "disabled") {
-    const message = cfgMap.get("system_disabled_message") || "No exams are currently available. Please check back later.";
-    return <SystemDisabledPage message={message} />;
-  }
-  if (mode === "results") {
-    console.log("🧾 Rendering results on root due to system mode");
-    return (
-      <PublicLocaleProvider>
-        <PublicResultsPage initialSystemMode="results" skipModeFetch />
-      </PublicLocaleProvider>
-    );
-  }
-  // Exam mode
-  const codeSettings = await getCodeFormatSettings();
-  const isMultiExam = codeSettings.enable_multi_exam ?? true;
+  // Prefer explicit toggles when present; otherwise infer from mode
+  const examsToggle = cfgMap.get("home_button_exams");
+  const resultsToggle = cfgMap.get("home_button_results");
+  const showExams = mode === "disabled"
+    ? false
+    : (examsToggle != null ? examsToggle === "true" : mode === "exam");
+  const showResults = mode === "disabled"
+    ? false
+    : (resultsToggle != null ? resultsToggle === "true" : mode === "results");
 
-  if (!isMultiExam) {
-    console.log("🎯 Single-exam mode enabled. Locating active published exam...");
-    const { data: exams, error: exErr } = await svc
-      .from("exams")
-      .select("id, title, status, start_time, end_time, access_type, created_at")
-      .eq("status", "published")
-      .order("start_time", { ascending: true, nullsFirst: true });
+  // Determine responsive layout based on how many buttons are visible
+  const visibleCount = (showExams ? 1 : 0) + (showResults ? 1 : 0) + 1; // +1 for Public ID
+  const gridColsSm = visibleCount === 1 ? "sm:grid-cols-1" : visibleCount === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3";
+  const containerMaxW = visibleCount === 1 ? "max-w-md" : visibleCount === 2 ? "max-w-2xl" : "max-w-3xl";
 
-    if (exErr) {
-      console.warn("⚠️ Failed to load published exams:", exErr.message);
-    }
-
-    const now = new Date();
-    const list = (exams || []).map((e: any) => {
-      const start = e.start_time ? new Date(e.start_time as any) : null;
-      const end = e.end_time ? new Date(e.end_time as any) : null;
-      const notStarted = !!(start && now < start);
-      const ended = !!(end && now > end);
-      const isActive = !notStarted && !ended;
-      return { ...e, is_active: isActive };
-    });
-    const firstActive = list.find((e: any) => e.is_active) || list[0] || null;
-
-    if (firstActive?.id) {
-      console.log("➡️ Redirecting to active exam:", firstActive.id);
-      redirect(`/exam/${firstActive.id}`);
-    }
-
-    // No published exam found; show a friendly empty state
-    return <NoExamsPage />;
-  }
-
-  console.log("🚀 Multi-exam mode enabled. Rendering MultiExamEntry on root (exam mode)");
   return (
     <PublicLocaleProvider>
-      <MultiExamEntry />
+      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className={`w-full ${containerMaxW}`}>
+          {/* Banner for disabled mode */}
+          {mode === "disabled" && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{disabledMessage || "No exams are currently available. Please check back later."}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-xl">
+            {/* Logo */}
+            <div className="mb-8 text-center">
+              <BrandLogo useAppSettings={true} size="lg" />
+            </div>
+
+            {/* Buttons */}
+            <div className={`grid grid-cols-1 ${gridColsSm} gap-4`}>
+              {showExams && (
+                <Link href="/exams" className="group">
+                  <div className="h-full rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors p-6 text-center shadow-sm">
+                    <div className=" h-12 mx-auto mb-3 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                      </svg>
+                    </div>
+                    <div className="font-semibold text-blue-900 text-lg text-center">{t("en", "exams")}</div>
+                    <p className="text-sm text-blue-800/80 mt-1">Browse available exams</p>
+                  </div>
+                </Link>
+              )}
+
+              {showResults && (
+                <Link href="/results" className="group">
+                  <div className="h-full rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors p-6 text-center shadow-sm">
+                    <div className=" h-12 mx-auto mb-3 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <div className="font-semibold text-indigo-900 text-lg text-center">Results</div>
+                    <p className="text-sm text-indigo-800/80 mt-1">Search your exam results</p>
+                  </div>
+                </Link>
+              )}
+
+              {/* Public ID is always visible */}
+              <Link href="/id" className="group">
+                <div className="h-full rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors p-6 text-center shadow-sm">
+                  <div className=" h-12 mx-auto mb-3 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H9l-4 4v-4H5a2 2 0 01-2-2V5zm2 0v10h14V5H5zm2 2h6v2H7V7zm0 4h10v2H7v-2z" />
+                    </svg>
+                  </div>
+                  <div className="font-semibold text-emerald-900 text-lg text-center">Public ID</div>
+                  <p className="text-sm text-emerald-800/80 mt-1">View your ID card</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
     </PublicLocaleProvider>
   );
-}
+ }
 
-function NoExamsPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
-      <div className="max-w-md mx-auto text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-6 bg-blue-100 rounded-full flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14,2 14,8 20,8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10,9 9,9 8,9"/>
-          </svg>
-        </div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          No Exams Available
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          There are currently no active exams available. Please check back later or contact your instructor.
-        </p>
-        <div className="text-sm text-[var(--muted-foreground)]">
-          If you believe this is an error, please contact your administrator.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExamNotStartedPage({ exam, startTime, locale }: { exam: MinimalExam; startTime: Date; locale: StudentLocale }) {
-  function formatDateInCairo(dt: Date, loc: StudentLocale) {
-    try {
-      return new Intl.DateTimeFormat(loc === "ar" ? "ar-EG" : "en-US", {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-        hour12: true,
-        timeZone: "Africa/Cairo",
-      }).format(dt);
-     } catch {
-       return dt.toLocaleString();
-     }
-   }
-  const formatted = formatDateInCairo(startTime, locale);
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]" dir={getDir(locale)} lang={locale}>
-      <div className="max-w-md mx-auto text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-6 bg-yellow-100 rounded-full flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-yellow-600">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12,6 12,12 16,14"/>
-          </svg>
-        </div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          {t(locale, "exam_not_started")}
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-4">
-          <strong>{exam.title}</strong>
-        </p>
-        <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          {t(locale, "exam_available_on", { date: formatted })}
-        </p>
-        <div className="text-sm text-[var(--muted-foreground)]">
-          {t(locale, "check_back_scheduled_time")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExamEndedPage({ exam, endTime, locale }: { exam: MinimalExam; endTime: Date; locale: StudentLocale }) {
-  function formatDateInCairo(dt: Date, loc: StudentLocale) {
-    try {
-      return new Intl.DateTimeFormat(loc === "ar" ? "ar-EG" : "en-US", {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-        hour12: true,
-        timeZone: "Africa/Cairo",
-      }).format(dt);
-    } catch {
-      return dt.toLocaleString();
-    }
-  }
-  const formatted = formatDateInCairo(endTime, locale);
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]" dir={getDir(locale)} lang={locale}>
-      <div className="max-w-md mx-auto text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-600">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="15" y1="9" x2="9" y2="15"/>
-            <line x1="9" y1="9" x2="15" y2="15"/>
-          </svg>
-        </div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          {t(locale, "exam_ended")}
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-4">
-          <strong>{exam.title}</strong>
-        </p>
-        <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          {t(locale, "exam_ended_on", { date: formatted })}
-        </p>
-        <div className="text-sm text-[var(--muted-foreground)]">
-          {t(locale, "help_contact_instructor")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SystemDisabledPage({ message }: { message: string }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
-      <div className="max-w-md mx-auto text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-600">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="15" y1="9" x2="9" y2="15"/>
-            <line x1="9" y1="9" x2="15" y2="15"/>
-          </svg>
-        </div>
-        <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-4">
-          System Unavailable
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-6 leading-relaxed">
-          {message}
-        </p>
-        <div className="text-sm text-[var(--muted-foreground)]">
-          Please check back later or contact your administrator.
-        </div>
-      </div>
-    </div>
-  );
-}
+ // Legacy inline pages removed in favor of a unified landing page
 
 function ErrorPage({ message }: { message: string }) {
   return (

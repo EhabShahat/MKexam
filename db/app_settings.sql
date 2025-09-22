@@ -14,6 +14,7 @@ create table if not exists public.app_settings (
   enable_name_search boolean,
   enable_code_search boolean,
   enable_multi_exam boolean default true,
+  results_show_view_attempt boolean default true,
   code_length integer default 4,
   code_format text default 'numeric',
   code_pattern text default null,
@@ -29,6 +30,7 @@ alter table if exists public.app_settings
   add column if not exists enable_name_search boolean,
   add column if not exists enable_code_search boolean,
   add column if not exists enable_multi_exam boolean default true,
+  add column if not exists results_show_view_attempt boolean default true,
   add column if not exists code_length integer default 4,
   add column if not exists code_format text default 'numeric',
   add column if not exists code_pattern text default null;

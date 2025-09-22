@@ -193,11 +193,20 @@ export default function MultiExamEntry() {
       const items: ByCodeExamItem[] = data?.exams || [];
       setStudentName(data?.student_name || null);
       
-      // In single exam mode, if there's exactly one exam, go directly to it
-      if (!isMultiExamMode && items.length === 1) {
-        const exam = items[0];
-        if (exam.is_active && !exam.not_started && !exam.ended && exam.attempt_status !== "completed") {
-          await startOrContinueExam(exam.id);
+      // In single exam mode, auto-start or continue without showing the list
+      if (!isMultiExamMode) {
+        // Prefer continuing an in-progress attempt
+        const inProgress = items.find((ex) => ex.attempt_status === "in_progress");
+        if (inProgress) {
+          await startOrContinueExam(inProgress.id, c);
+          return;
+        }
+        // Otherwise start the first available active exam
+        const available = items.find(
+          (ex) => ex.is_active && !ex.not_started && !ex.ended && ex.attempt_status !== "completed"
+        );
+        if (available) {
+          await startOrContinueExam(available.id, c);
           return;
         }
       }
@@ -210,8 +219,8 @@ export default function MultiExamEntry() {
     }
   }
 
-  async function startOrContinueExam(examId: string) {
-    const c = code.trim();
+  async function startOrContinueExam(examId: string, overrideCode?: string) {
+    const c = (overrideCode ?? code).trim();
     if (!isValidCode(c)) return;
 
     setStartingExamId(examId);
