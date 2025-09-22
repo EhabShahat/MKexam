@@ -7,8 +7,8 @@ interface StudentSummary {
 }
 
 // Server Component wrapper (Next.js 15)
-export default async function StudentIdCardPage({ params }: { params: { studentId: string } | Promise<{ studentId: string }> }) {
-  const p: any = typeof (params as any)?.then === "function" ? await params : params;
+export default async function StudentIdCardPage(props: any) {
+  const p: any = typeof (props as any)?.params?.then === "function" ? await (props as any).params : (props as any).params;
   const studentId = p?.studentId as string;
   return <IdCardClient studentId={studentId} />;
 }
