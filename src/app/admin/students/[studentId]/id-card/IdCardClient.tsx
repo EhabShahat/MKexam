@@ -1,4 +1,9 @@
-import IdCardClient from "./IdCardClient";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { authFetch } from "@/lib/authFetch";
+import QRCode from "qrcode";
 
 interface StudentSummary {
   student_id: string;
@@ -6,17 +11,7 @@ interface StudentSummary {
   student_name: string | null;
 }
 
-// Server Component wrapper (Next.js 15)
-export default async function StudentIdCardPage({ params }: { params: { studentId: string } | Promise<{ studentId: string }> }) {
-  const p: any = typeof (params as any)?.then === "function" ? await params : params;
-  const studentId = p?.studentId as string;
-  return <IdCardClient studentId={studentId} />;
-}
-
-/* Legacy client implementation (kept here for reference and type safety; not exported)
-function LegacyStudentIdCardPageClient({ params }: any) {
-  const { studentId } = params;
-
+export default function StudentIdCardClient({ studentId }: { studentId: string }) {
   const { data: student } = useQuery({
     queryKey: ["admin", "student", studentId],
     queryFn: async (): Promise<StudentSummary | null> => {
@@ -49,7 +44,7 @@ function LegacyStudentIdCardPageClient({ params }: any) {
   const [ready, setReady] = useState(false);
 
   const card = {
-    width: 720, // good printable quality
+    width: 720,
     height: 960,
     padding: 40,
     bg: [
@@ -89,7 +84,6 @@ function LegacyStudentIdCardPageClient({ params }: any) {
       }
       ctx.globalAlpha = 1;
 
-     
       // QR content
       const qrText = code || "";
 
@@ -227,4 +221,3 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.src = src;
   });
 }
-*/
