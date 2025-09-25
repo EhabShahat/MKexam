@@ -4,11 +4,12 @@ import { denyRequest } from '@/server/admin/requests';
 // POST /api/admin/requests/[id]/deny
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const result = await denyRequest(params.id, body.reason);
+    const result = await denyRequest(id, body.reason);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('POST /api/admin/requests/[id]/deny error:', error);
