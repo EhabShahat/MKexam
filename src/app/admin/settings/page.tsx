@@ -224,10 +224,8 @@ export default function AdminSettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
-                  System Settings
-                </h1>
-                <p className="text-slate-600 text-lg">Configure your exam application settings and preferences</p>
-              </div>
+                  System Settings 
+                </h1></div>
               <div className="flex items-center gap-4">
                 <button
                   onClick={saveSettings}
@@ -293,7 +291,7 @@ export default function AdminSettingsPage() {
                     >
                       <div className="text-center">
                         <div className="font-semibold">Single Exam</div>
-                        <div className="text-sm opacity-75">One exam per student code</div>
+                        
                       </div>
                     </button>
                     <button
@@ -306,7 +304,6 @@ export default function AdminSettingsPage() {
                     >
                       <div className="text-center">
                         <div className="font-semibold">Multi-Exam</div>
-                        <div className="text-sm opacity-75">Multiple exams per student</div>
                       </div>
                     </button>
                   </div>
@@ -315,7 +312,6 @@ export default function AdminSettingsPage() {
                 {/* Student Results Search Mode */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-3">Student Results Search Mode</label>
-                  <p className="text-sm text-slate-600 mb-4">Configure how students can search for their results on the public results page.</p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
@@ -330,7 +326,7 @@ export default function AdminSettingsPage() {
                     >
                       <div className="text-center">
                         <div className="font-semibold">Name Search</div>
-                        <div className="text-sm opacity-75">Students search by their name</div>
+                        
                       </div>
                     </button>
                     <button
@@ -346,7 +342,7 @@ export default function AdminSettingsPage() {
                     >
                       <div className="text-center">
                         <div className="font-semibold">Code Search</div>
-                        <div className="text-sm opacity-75">Students search by their code</div>
+                        
                       </div>
                     </button>
                   </div>
@@ -356,7 +352,7 @@ export default function AdminSettingsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div className="text-sm text-blue-800">
-                        <strong>Note:</strong> This setting controls how students can find their exam results on the public results page. 
+                        
                         {settings.enable_name_search && !settings.enable_code_search && " Students will search by entering their name."}
                         {!settings.enable_name_search && settings.enable_code_search && " Students will search by entering their unique code."}
                       </div>
@@ -370,7 +366,7 @@ export default function AdminSettingsPage() {
                   <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
                     <div className="pr-4">
                       <div className="font-semibold text-slate-800">Show "View Attempt" Button</div>
-                      <div className="text-sm text-slate-600">Allow students to open their attempt (with answers) on the public results page. Only available after code verification and when the exam is finished.</div>
+                      
                     </div>
                     <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -615,7 +611,7 @@ export default function AdminSettingsPage() {
                   </svg>
                   Administrator Management
                 </h2>
-                <p className="text-gray-500 text-md ml-9">Manage users who have administrative access to the system</p>
+                
               </div>
 
               {/* Account Management Interface */}

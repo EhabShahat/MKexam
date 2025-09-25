@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
+import { downloadArabicCSV, getBilingualHeader, formatArabicNumber } from "@/lib/exportUtils";
 
 interface HistoryWeeks {
   label: string;
@@ -34,7 +35,7 @@ export default function AttendanceHistoryPage() {
   const { data, isLoading } = useQuery<HistoryResponse>({
     queryKey: ["admin", "attendance", "history"],
     queryFn: async () => {
-      const res = await authFetch("/api/admin/attendance/history?weeks=16");
+      const res = await authFetch("/api/admin/attendance?action=history&weeks=16");
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Load failed");
       return j as HistoryResponse;
@@ -116,11 +117,12 @@ export default function AttendanceHistoryPage() {
   }, [visibleIndices, weeks, columnCounts]);
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">History</h1>
-        <p className="text-gray-500">View attendance records by week</p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">History</h1>
+          <p className="text-gray-500">View attendance records by week</p>
+        </div>
 
       {/* Non-Attendees cards */}
       <div className="max-w-5xl mx-auto">
@@ -140,19 +142,19 @@ export default function AttendanceHistoryPage() {
         )}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <DisclosureCard
-            title={`Last 2 Weeks Non-Attendees (${data?.nonAttendees.last2Weeks.length || 0} people)`}
+            title={`Last 2 Weeks (${data?.nonAttendees.last2Weeks.length || 0})`}
             items={data?.nonAttendees.last2Weeks || []}
             onWhatsApp={openWhatsAppFor}
             onCall={callNumberFor}
           />
           <DisclosureCard
-            title={`Last Month Non-Attendees (${data?.nonAttendees.lastMonth.length || 0} people)`}
+            title={`Last Month (${data?.nonAttendees.lastMonth.length || 0})`}
             items={data?.nonAttendees.lastMonth || []}
             onWhatsApp={openWhatsAppFor}
             onCall={callNumberFor}
           />
           <DisclosureCard
-            title={`3+ Months Non-Attendees (${data?.nonAttendees.threePlusMonths.length || 0} people)`}
+            title={`3+ Months (${data?.nonAttendees.threePlusMonths.length || 0})`}
             items={data?.nonAttendees.threePlusMonths || []}
             onWhatsApp={openWhatsAppFor}
             onCall={callNumberFor}
@@ -201,7 +203,7 @@ export default function AttendanceHistoryPage() {
             <button className="btn bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportCSV(visibleHeaders, filtered, visibleIndices)}>
               <span className="inline-flex items-center gap-2">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v12H4z"/><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8 20h8M12 16v4"/></svg>
-                Export Records
+               Export
               </span>
             </button>
           </div>
@@ -250,6 +252,7 @@ export default function AttendanceHistoryPage() {
           </tbody>
         </table>
       </div>
+      </div>
     </div>
   );
 }
@@ -296,26 +299,35 @@ function DisclosureCard({ title, items, onWhatsApp, onCall }: { title: string; i
 }
 
 function exportCSV(headers: string[], rows: HistoryStudentRow[], visibleIndices: number[]) {
-  const header = ["Code", "Name", ...headers, "Total"];
-  const lines = [header.join(",")];
-  for (const r of rows) {
+  // Create bilingual headers
+  const csvHeaders = [
+    getBilingualHeader("Code"),
+    getBilingualHeader("Student Name"),
+    ...headers, // Keep week headers as-is
+    getBilingualHeader("Total")
+  ];
+
+  // Prepare data with Arabic formatting
+  const data = rows.map((r) => {
     const visTotal = visibleIndices.reduce((sum, i) => sum + (r.weeklyCounts[i] || 0), 0);
-    const row = [
+    const weekAttendance = visibleIndices.map((i) => ((r.weeklyCounts[i] || 0) > 0 ? "حضر / Present" : "غائب / Absent"));
+    
+    return [
       r.code,
-      JSON.stringify(r.student_name || ""),
-      ...visibleIndices.map((i) => ((r.weeklyCounts[i] || 0) > 0 ? "1" : "0")),
-      String(visTotal)
+      r.student_name || "",
+      ...weekAttendance,
+      formatArabicNumber(visTotal)
     ];
-    lines.push(row.join(","));
-  }
-  const csv = lines.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `attendance_history.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  });
+
+  // Use Arabic-compatible export
+  downloadArabicCSV({
+    filename: "attendance_history",
+    headers: csvHeaders,
+    data,
+    includeTimestamp: true,
+    rtlSupport: true
+  });
 }
 
 function formatDayLabel(dateStr?: string) {

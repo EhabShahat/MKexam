@@ -14,6 +14,7 @@ create table if not exists public.exams (
   duration_minutes integer null,
   status text not null default 'draft' check (status in ('draft','published','archived','done')),
   access_type text not null default 'open' check (access_type in ('open','code_based','ip_restricted')),
+  exam_type text not null default 'exam' check (exam_type in ('exam','homework','quiz')),
   settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -48,6 +49,16 @@ begin
     -- Already created
     null;
   end;
+end $$;
+
+-- Add exam_type column to existing exams table (idempotent)
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'exams' and column_name = 'exam_type'
+  ) then
+    alter table public.exams add column exam_type text not null default 'exam' check (exam_type in ('exam','homework','quiz'));
+  end if;
 end $$;
 
 create table if not exists public.questions (

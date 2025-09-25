@@ -9,6 +9,7 @@ import StatsCard from "@/components/admin/StatsCard";
 import ModernCard from "@/components/admin/ModernCard";
 import ActionButton from "@/components/admin/ActionButton";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { ExamTypeMicroBadge } from "@/components/admin/ExamTypeSelector";
 
 interface Exam {
   id: string;
@@ -20,6 +21,7 @@ interface Exam {
   created_at: string;
   question_count?: number;
   attempt_count?: number;
+  exam_type?: 'exam' | 'homework' | 'quiz';
 }
 
 interface AppSettings {
@@ -59,9 +61,9 @@ export default function AdminHomePage() {
   const { data: homeButtons, isLoading: loadingHomeButtons } = useQuery({
     queryKey: ["admin", "homeButtons"],
     queryFn: async () => {
-      const res = await authFetch("/api/admin/system/home-buttons");
+      const res = await authFetch("/api/admin/system?action=home-buttons");
       if (!res.ok) throw new Error("Failed to load Home Buttons visibility");
-      return res.json() as Promise<{ exams: boolean | null; results: boolean | null }>;
+      return res.json() as Promise<{ exams: boolean | null; results: boolean | null; register: boolean | null }>;
     },
   });
 
@@ -69,7 +71,7 @@ export default function AdminHomePage() {
   const { data: attendanceToday, isLoading: loadingAttendanceToday } = useQuery({
     queryKey: ["admin", "attendance", "today-count"],
     queryFn: async () => {
-      const res = await authFetch("/api/admin/attendance/today-count");
+      const res = await authFetch("/api/admin/attendance?action=today-count");
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Failed to load today's attendance count");
       return j as { date: string; count: number };
@@ -78,8 +80,8 @@ export default function AdminHomePage() {
   });
 
   const updateHomeButtonsMutation = useMutation({
-    mutationFn: async (payload: Partial<{ exams: boolean | null; results: boolean | null }>) => {
-      const res = await authFetch("/api/admin/system/home-buttons", {
+    mutationFn: async (payload: Partial<{ exams: boolean | null; results: boolean | null; register: boolean | null }>) => {
+      const res = await authFetch("/api/admin/system?action=home-buttons", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -98,7 +100,7 @@ export default function AdminHomePage() {
 
   const disableSystemMutation = useMutation({
     mutationFn: async ({ message }: { message: string }) => {
-      const res = await authFetch("/api/admin/system/mode", {
+      const res = await authFetch("/api/admin/system?action=mode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "disabled", message }),
@@ -120,7 +122,7 @@ export default function AdminHomePage() {
   // Enable system back to normal (Exam) mode
   const enableSystemMutation = useMutation({
     mutationFn: async () => {
-      const res = await authFetch("/api/admin/system/mode", {
+      const res = await authFetch("/api/admin/system?action=mode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "exam" }),
@@ -209,6 +211,10 @@ export default function AdminHomePage() {
     homeButtons?.results !== null && homeButtons?.results !== undefined
       ? !!homeButtons?.results
       : systemMode === 'results';
+  const registerVisible =
+    homeButtons?.register !== null && homeButtons?.register !== undefined
+      ? !!homeButtons?.register
+      : false; // Default to false (hidden)
 
   // Filter exams based on selected filter
   const filteredExams = examFilter === 'all' ? exams : exams.filter(exam => exam.status === examFilter);
@@ -240,7 +246,7 @@ export default function AdminHomePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl shadow-sm border border-blue-100">
         <div>
@@ -261,7 +267,7 @@ export default function AdminHomePage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            View Results
+            Results
           </Link>
           <Link href="/admin/exams/new">
             <ActionButton
@@ -273,7 +279,7 @@ export default function AdminHomePage() {
                 </svg>
               }
             >
-              Create New Exam
+             New Exam
             </ActionButton>
           </Link>
         </div>
@@ -306,14 +312,14 @@ export default function AdminHomePage() {
               <p className="text-sm text-gray-600 mt-1">
                 {systemMode === 'disabled'
                   ? `Disabled: ${systemStatus?.disableMessage || 'No exams available to students'}`
-                  : `Home Page · Exams: ${examsVisible ? 'Visible' : 'Hidden'} • Results: ${resultsVisible ? 'Visible' : 'Hidden'}`}
+                  : `Exams: ${examsVisible ? 'Visible' : 'Hidden'} • Results: ${resultsVisible ? 'Visible' : 'Hidden'} • Register: ${registerVisible ? 'Visible' : 'Hidden'}`}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-6">
             {/* Exams button visibility toggle */}
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-800">Exams Button</span>
+              <span className="text-sm font-medium text-gray-800">Exams</span>
               <button
                 type="button"
                 aria-pressed={examsVisible}
@@ -334,7 +340,7 @@ export default function AdminHomePage() {
 
             {/* Results button visibility toggle */}
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-800">Results Button</span>
+              <span className="text-sm font-medium text-gray-800">Results</span>
               <button
                 type="button"
                 aria-pressed={resultsVisible}
@@ -353,7 +359,30 @@ export default function AdminHomePage() {
               </button>
             </div>
 
-            {/* Disable/Enable System action */}
+            {/* Registration button visibility toggle */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-800">Register</span>
+              <button
+                type="button"
+                aria-pressed={registerVisible}
+                onClick={() => updateHomeButtonsMutation.mutate({ register: !registerVisible })}
+                disabled={loadingHomeButtons || updateHomeButtonsMutation.isPending}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  registerVisible ? 'bg-purple-500' : 'bg-gray-300'
+                } ${(loadingHomeButtons || updateHomeButtonsMutation.isPending) ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'}`}
+                title={registerVisible ? 'Hide Registration button on home page' : 'Show Registration button on home page'}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                    registerVisible ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            
+          </div>
+          {/* Disable/Enable System action */}
             {systemMode === 'disabled' ? (
               <ActionButton
                 variant="success"
@@ -384,7 +413,6 @@ export default function AdminHomePage() {
                 Disable System
               </ActionButton>
             )}
-          </div>
         </div>
       </ModernCard>
 
@@ -593,14 +621,14 @@ export default function AdminHomePage() {
       {appSettings?.enable_multi_exam && (
         <ModernCard className="shadow-md hover:shadow-lg transition-all duration-300 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-l-blue-500">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-blue-900">Multi-Exam Mode Active</h3>
-              <p className="text-blue-700">Students can access multiple published exams simultaneously. All published exams are available to students.</p>
+              <h2 className="text-lg font-semibold text-blue-900">Multi-Exam Mode Active</h2>
+              
             </div>
           </div>
         </ModernCard>
@@ -789,105 +817,200 @@ function ExamRow({
   isArchiving: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-200 hover:shadow-md transition-all duration-300 exam-row">
-      <div className="flex items-center gap-4">
-        <div className="bg-blue-100 rounded-lg p-2 text-blue-600 hidden sm:block">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+    <div className="border border-gray-200 rounded-xl bg-white hover:bg-gray-50 hover:border-blue-200 hover:shadow-md transition-all duration-300 exam-row">
+      {/* Mobile Layout */}
+      <div className="block sm:hidden p-4 space-y-3">
+        {/* Header with Status and Title */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <StatusBadge status={exam.status} size="sm" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h4 className="font-semibold text-gray-900 text-base line-clamp-2 leading-tight">{exam.title}</h4>
+              <ExamTypeMicroBadge type={exam.exam_type || "exam"} />
+            </div>
+          </div>
+          <div className="bg-blue-100 rounded-lg p-2 text-blue-600 flex-shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
         </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <StatusBadge status={exam.status} size="sm" />
-            <h4 className="font-medium text-gray-900">{exam.title}</h4>
-          </div>
-          <div className="flex items-center flex-wrap gap-2 text-sm text-gray-600 mt-1">
+
+        {/* Metadata in compact format */}
+        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+          <span className="flex items-center gap-1">
+            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">{exam.question_count || 0}</span> questions
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            {exam.access_type}
+          </span>
+          {exam.created_at && (
             <span className="flex items-center gap-1">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              {exam.question_count || 0} questions
+              {new Date(exam.created_at).toLocaleDateString()}
             </span>
-            <span className="flex items-center gap-1">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-              {exam.access_type}
-            </span>
-            {exam.created_at && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Created {new Date(exam.created_at).toLocaleDateString()}
-              </span>
-            )}
-          </div>
+          )}
+        </div>
+
+        {/* Action Buttons - Mobile */}
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+          {exam.status === 'draft' && (
+            <ActionButton
+              variant="success"
+              size="sm"
+              onClick={onPublish}
+              loading={isPublishing}
+              className="flex-1 text-xs"
+            >
+              Publish
+            </ActionButton>
+          )}
+          {exam.status === 'published' && (
+            <ActionButton
+              variant="success"
+              size="sm"
+              onClick={onDone}
+              loading={isMarkingDone}
+              className="flex-1 text-xs"
+            >
+              Mark Done
+            </ActionButton>
+          )}
+          {exam.status === 'done' && (
+            <ActionButton
+              variant="warning"
+              size="sm"
+              onClick={onArchive}
+              loading={isArchiving}
+              className="flex-1 text-xs"
+            >
+              Archive
+            </ActionButton>
+          )}
+          <Link href={`/admin/exams/${exam.id}/edit`} className="flex-1">
+            <ActionButton 
+              variant="secondary" 
+              size="sm"
+              className="w-full text-xs"
+            >
+              Edit
+            </ActionButton>
+          </Link>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {exam.status === 'draft' && (
-          <ActionButton
-            variant="success"
-            size="sm"
-            onClick={onPublish}
-            loading={isPublishing}
-            className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
-          >
-            Publish
-          </ActionButton>
-        )}
-        {exam.status === 'published' && (
-          <ActionButton
-            variant="success"
-            size="sm"
-            onClick={onDone}
-            loading={isMarkingDone}
-            className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            }
-          >
-            Done
-          </ActionButton>
-        )}
-        {exam.status === 'done' && (
-          <ActionButton
-            variant="warning"
-            size="sm"
-            onClick={onArchive}
-            loading={isArchiving}
-            className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-            }
-          >
-            Archive
-          </ActionButton>
-        )}
-        <Link href={`/admin/exams/${exam.id}/edit`}>
-          <ActionButton 
-            variant="secondary" 
-            size="sm"
-            className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            }
-          >
-            Edit
-          </ActionButton>
-        </Link>
+
+      {/* Desktop Layout */}
+      <div className="hidden sm:flex items-center justify-between p-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-100 rounded-lg p-2 text-blue-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <StatusBadge status={exam.status} size="sm" />
+              <h4 className="font-medium text-gray-900">{exam.title}</h4>
+              <ExamTypeMicroBadge type={exam.exam_type || "exam"} />
+            </div>
+            <div className="flex items-center flex-wrap gap-2 text-sm text-gray-600 mt-1">
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {exam.question_count || 0} questions
+              </span>
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                {exam.access_type}
+              </span>
+              {exam.created_at && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Created {new Date(exam.created_at).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {exam.status === 'draft' && (
+            <ActionButton
+              variant="success"
+              size="sm"
+              onClick={onPublish}
+              loading={isPublishing}
+              className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
+            >
+              Publish
+            </ActionButton>
+          )}
+          {exam.status === 'published' && (
+            <ActionButton
+              variant="success"
+              size="sm"
+              onClick={onDone}
+              loading={isMarkingDone}
+              className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              }
+            >
+              Done
+            </ActionButton>
+          )}
+          {exam.status === 'done' && (
+            <ActionButton
+              variant="warning"
+              size="sm"
+              onClick={onArchive}
+              loading={isArchiving}
+              className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              }
+            >
+              Archive
+            </ActionButton>
+          )}
+          <Link href={`/admin/exams/${exam.id}/edit`}>
+            <ActionButton 
+              variant="secondary" 
+              size="sm"
+              className="shadow-sm hover:shadow transition-all duration-200 hover:scale-105"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              }
+            >
+              Edit
+            </ActionButton>
+          </Link>
+        </div>
       </div>
     </div>
   );

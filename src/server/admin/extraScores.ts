@@ -194,8 +194,9 @@ export async function extraScoresExamsGET(req: NextRequest) {
 
     const { data: exams, error: examsErr } = await svc
       .from("exams")
-      .select("id, title, status")
+      .select("id, title, status, exam_type")
       .eq("status", "done")
+      .eq("exam_type", "exam") // Only show actual "exam" type assessments
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
     if (examsErr) throw examsErr;
@@ -445,5 +446,428 @@ export async function extraScoresImportPOST(req: NextRequest) {
     if (e instanceof Response) return e;
     console.error("extra-scores import error:", e);
     return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+// GET /api/admin/extra-scores/attendance
+export async function extraScoresAttendanceGET(req: NextRequest) {
+  try {
+    await requireAdmin(req);
+    const svc = supabaseServer();
+    
+    // Get all students
+    const { data: students, error: studentsErr } = await svc
+      .from("students")
+      .select("id, code, student_name, created_at")
+      .order("code");
+    
+    if (studentsErr) {
+      return NextResponse.json({ error: studentsErr.message }, { status: 400 });
+    }
+
+    // Get all attendance records (no date filtering)
+    const { data: attendance, error: attendanceErr } = await svc
+      .from("attendance_records")
+      .select("student_id, session_date")
+      .order("session_date");
+      
+    if (attendanceErr) {
+      return NextResponse.json({ error: attendanceErr.message }, { status: 400 });
+    }
+
+    // Calculate total actual meeting sessions (days where any student was scanned)
+    const allSessionDates = [...new Set((attendance || []).map(record => record.session_date))];
+    const totalMeetings = allSessionDates.length;
+
+    // Group attendance by student
+    const attendanceByStudent: Record<string, string[]> = {};
+    for (const record of attendance || []) {
+      if (!attendanceByStudent[record.student_id]) {
+        attendanceByStudent[record.student_id] = [];
+      }
+      attendanceByStudent[record.student_id].push(record.session_date);
+    }
+
+    // Calculate attendance statistics for each student
+    const attendanceStats = (students || []).map(student => {
+      const attendedDays = attendanceByStudent[student.id] || [];
+      const uniqueAttendedDays = [...new Set(attendedDays)].length; // Remove duplicates
+      const percentage = totalMeetings > 0 ? Math.round((uniqueAttendedDays / totalMeetings) * 100) : 0;
+      
+      return {
+        student_id: student.id,
+        code: student.code,
+        student_name: student.student_name,
+        attended_days: uniqueAttendedDays,
+        total_meetings: totalMeetings,
+        attendance_percentage: percentage
+      };
+    });
+
+    // Get first and last session dates for display
+    const firstSessionDate = allSessionDates.length > 0 ? allSessionDates.sort()[0] : null;
+    const lastSessionDate = allSessionDates.length > 0 ? allSessionDates.sort().reverse()[0] : null;
+
+    return NextResponse.json({
+      items: attendanceStats,
+      period: {
+        start_date: firstSessionDate,
+        end_date: lastSessionDate,
+        total_meetings: totalMeetings,
+        session_dates: allSessionDates.sort()
+      }
+    });
+    
+  } catch (error: any) {
+    console.error("Attendance API error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to fetch attendance data" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/admin/extra-scores/sync-attendance
+// GET /api/admin/extra-scores/exam-tags - Calculate exam tag scores
+export async function extraScoresExamTagsGET(req: NextRequest) {
+  try {
+    await requireAdmin(req);
+    const svc = supabaseServer();
+    
+    // Get all exams with their assessment types and results
+    const { data: exams, error: examsError } = await svc
+      .from("exams")
+      .select("id, title, exam_type, status")
+      .in("status", ["done", "published"]);
+      
+    if (examsError) {
+      return NextResponse.json({ error: examsError.message }, { status: 400 });
+    }
+    
+    // Get all students
+    const { data: students, error: studentsError } = await svc
+      .from("students")
+      .select("id, code, student_name");
+      
+    if (studentsError) {
+      return NextResponse.json({ error: studentsError.message }, { status: 400 });
+    }
+    
+    // Get all exam attempts with results
+    const { data: attempts, error: attemptsError } = await svc
+      .from("exam_attempts")
+      .select(`
+        id, student_id, exam_id, completion_status, submitted_at,
+        exam_results(score_percentage, final_score_percentage)
+      `)
+      .eq("completion_status", "submitted");
+      
+    if (attemptsError) {
+      return NextResponse.json({ error: attemptsError.message }, { status: 400 });
+    }
+    
+    // Extract unique assessment types from all exams
+    const allTypes = new Set<string>();
+    const examsByType = new Map<string, any[]>();
+    
+    (exams || []).forEach(exam => {
+      const examType = exam.exam_type || 'exam'; // Default to 'exam' if null
+      
+      if (examType) {
+        allTypes.add(examType);
+        if (!examsByType.has(examType)) {
+          examsByType.set(examType, []);
+        }
+        examsByType.get(examType)!.push(exam);
+      }
+    });
+    
+    // Build attempt map by student and exam
+    const attemptMap = new Map<string, Map<string, any>>();
+    (attempts || []).forEach(attempt => {
+      if (!attemptMap.has(attempt.student_id)) {
+        attemptMap.set(attempt.student_id, new Map());
+      }
+      attemptMap.get(attempt.student_id)!.set(attempt.exam_id, attempt);
+    });
+    
+    // Calculate assessment type scores for each student
+    const typeStats = Array.from(allTypes).map(type => {
+      const typeExams = examsByType.get(type) || [];
+      const studentScores = (students || []).map(student => {
+        let totalScore = 0;
+        let examCount = 0;
+        
+        typeExams.forEach(exam => {
+          const studentAttempts = attemptMap.get(student.id);
+          const attempt = studentAttempts?.get(exam.id);
+          
+          if (attempt) {
+            const results = Array.isArray(attempt.exam_results) ? 
+                          attempt.exam_results[0] : attempt.exam_results;
+            
+            if (results) {
+              // Use final score if available, otherwise regular score
+              const scorePercentage = results.final_score_percentage ?? results.score_percentage;
+              if (scorePercentage != null && !isNaN(Number(scorePercentage))) {
+                totalScore += Number(scorePercentage);
+                examCount += 1;
+              }
+            }
+          }
+        });
+        
+        const averagePercentage = examCount > 0 ? Math.round(totalScore / examCount) : 0;
+        
+        return {
+          student_id: student.id,
+          code: student.code,
+          student_name: student.student_name,
+          exams_attempted: examCount,
+          total_exams: typeExams.length,
+          average_percentage: averagePercentage
+        };
+      });
+      
+      return {
+        tag: type, // Keep 'tag' for frontend compatibility
+        exam_count: typeExams.length,
+        exams: typeExams.map(e => ({ id: e.id, title: e.title })),
+        students: studentScores
+      };
+    });
+    
+    return NextResponse.json({ tags: typeStats });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+// POST /api/admin/extra-scores/sync-exam-tags - Sync exam tag scores to extra fields
+export async function extraScoresSyncExamTagsPOST(req: NextRequest) {
+  try {
+    await requireAdmin(req);
+    const svc = supabaseServer();
+    
+    const body = await req.json().catch(() => ({}));
+    const { selectedTags = [] } = body;
+    
+    if (!Array.isArray(selectedTags) || selectedTags.length === 0) {
+      return NextResponse.json({ error: "No tags selected" }, { status: 400 });
+    }
+    
+    // Get tag calculation data
+    const tagData = await extraScoresExamTagsGET(req);
+    const tagResponse = await tagData.json();
+    const allTagStats = tagResponse.tags || [];
+    
+    let createdFields = 0;
+    let updatedStudents = 0;
+    
+    // Process each selected tag
+    for (const selectedTag of selectedTags) {
+      const tagStats = allTagStats.find((t: any) => t.tag === selectedTag);
+      if (!tagStats) continue;
+      
+      const fieldKey = `exam_type_${selectedTag.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      
+      // 1. Create or update the tag field in extra_score_fields
+      const { data: existingField } = await svc
+        .from("extra_score_fields")
+        .select("id, key")
+        .eq("key", fieldKey)
+        .maybeSingle();
+      
+      if (!existingField) {
+        // Create new tag field
+        const { error: fieldError } = await svc
+          .from("extra_score_fields")
+          .insert({
+            key: fieldKey,
+            label: `${selectedTag.charAt(0).toUpperCase() + selectedTag.slice(1)} Score`,
+            type: "number",
+            hidden: false,
+            include_in_pass: true,
+            pass_weight: 0.2, // Default weight
+            max_points: 100,
+            order_index: 500 + createdFields // Put after manual fields but before attendance
+          });
+          
+        if (fieldError) {
+          console.error(`Error creating field for tag ${selectedTag}:`, fieldError);
+          continue;
+        }
+        createdFields++;
+      } else {
+        // Update existing field
+        const { error: updateError } = await svc
+          .from("extra_score_fields")
+          .update({
+            label: `${selectedTag.charAt(0).toUpperCase() + selectedTag.slice(1)} Score`,
+            max_points: 100
+          })
+          .eq("key", fieldKey);
+          
+        if (updateError) {
+          console.error(`Error updating field for tag ${selectedTag}:`, updateError);
+        }
+      }
+      
+      // 2. Update students with tag scores
+      for (const studentScore of tagStats.students || []) {
+        // Get current extra_scores
+        const { data: currentStudent, error: fetchError } = await svc
+          .from("students")
+          .select("extra_scores")
+          .eq("id", studentScore.student_id)
+          .single();
+          
+        if (fetchError) continue;
+        
+        const currentExtraScores = currentStudent.extra_scores || {};
+        const updatedExtraScores = {
+          ...currentExtraScores,
+          [fieldKey]: studentScore.average_percentage
+        };
+        
+        // Update student with new tag score
+        const { error: updateError } = await svc
+          .from("students")
+          .update({ extra_scores: updatedExtraScores })
+          .eq("id", studentScore.student_id);
+          
+        if (!updateError) {
+          updatedStudents++;
+        }
+      }
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      created_fields: createdFields,
+      updated_students: updatedStudents,
+      processed_tags: selectedTags
+    });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+export async function extraScoresSyncAttendancePOST(req: NextRequest) {
+  try {
+    await requireAdmin(req);
+    const svc = supabaseServer();
+    
+    const body = await req.json().catch(() => ({}));
+    const { weeks = 12, fieldKey = "attendance_percentage" } = body;
+    
+    // Get attendance data (call our local function instead of making HTTP request)
+    const attendanceData = await extraScoresAttendanceGET(req);
+    const attendanceResponse = await attendanceData.json();
+    const attendanceItems = attendanceResponse.items || [];
+    
+    // 1. Create or update the attendance field in extra_score_fields
+    const { data: existingField } = await svc
+      .from("extra_score_fields")
+      .select("id, key, label, type, order_index, hidden, include_in_pass, pass_weight, max_points")
+      .eq("key", fieldKey)
+      .maybeSingle();
+    
+    if (!existingField) {
+      // Create new attendance field
+      const { error: fieldError } = await svc
+        .from("extra_score_fields")
+        .insert({
+          key: fieldKey,
+          label: `Attendance Percentage`,
+          type: "number",
+          hidden: false,
+          include_in_pass: true,
+          pass_weight: 0.2, // Default weight of 0.2 for attendance
+          max_points: 100,
+          order_index: 999 // Put it at the end
+        });
+        
+      if (fieldError) {
+        return NextResponse.json({ error: fieldError.message }, { status: 400 });
+      }
+    } else {
+      // Update existing field to ensure it has correct settings
+      const { error: updateError } = await svc
+        .from("extra_score_fields")
+        .update({
+          label: `Attendance Percentage`,
+          max_points: 100
+        })
+        .eq("key", fieldKey);
+        
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 400 });
+      }
+    }
+    
+    // 2. Get all students to sync attendance data
+    const { data: students, error: studentsError } = await svc
+      .from("students")
+      .select("id, code");
+      
+    if (studentsError) {
+      return NextResponse.json({ error: studentsError.message }, { status: 400 });
+    }
+    
+    // 3. Prepare attendance data for students
+    const attendanceMap = new Map();
+    attendanceItems.forEach((item: any) => {
+      attendanceMap.set(item.student_id, item.attendance_percentage);
+    });
+    
+    let updatedCount = 0;
+    
+    // 4. Update each student's extra_scores with attendance percentage
+    for (const student of students || []) {
+      const attendancePercentage = attendanceMap.get(student.id) || 0;
+      
+      // Get current extra_scores
+      const { data: currentStudent, error: fetchError } = await svc
+        .from("students")
+        .select("extra_scores")
+        .eq("id", student.id)
+        .single();
+        
+      if (fetchError) continue;
+      
+      const currentExtraScores = currentStudent.extra_scores || {};
+      const updatedExtraScores = {
+        ...currentExtraScores,
+        [fieldKey]: attendancePercentage
+      };
+      
+      // Update student with new attendance data
+      const { error: updateError } = await svc
+        .from("students")
+        .update({ extra_scores: updatedExtraScores })
+        .eq("id", student.id);
+        
+      if (!updateError) {
+        updatedCount++;
+      }
+    }
+    
+    return NextResponse.json({
+      success: true,
+      field_key: fieldKey,
+      updated_students: updatedCount,
+      total_students: students?.length || 0,
+      message: `Attendance data synced successfully for ${updatedCount} students`
+    });
+    
+  } catch (error: any) {
+    console.error("Sync attendance API error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to sync attendance data" },
+      { status: 500 }
+    );
   }
 }

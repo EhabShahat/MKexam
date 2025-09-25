@@ -280,3 +280,73 @@ export async function attendanceHistoryGET(req: NextRequest) {
     return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
   }
 }
+
+export async function attendanceDeleteDELETE(req: NextRequest) {
+  try {
+    const admin = await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+
+    const body = await req.json().catch(() => ({}));
+    const { id } = body || {};
+
+    if (!id) {
+      return NextResponse.json({ error: "attendance_id_required" }, { status: 400 });
+    }
+
+    // Verify the attendance record exists and get student info for logging
+    const { data: existingRecord, error: fetchErr } = await svc
+      .from("attendance_records")
+      .select("id, student_id, session_date, students(code, student_name)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 400 });
+    if (!existingRecord) return NextResponse.json({ error: "attendance_record_not_found" }, { status: 404 });
+
+    // Delete the attendance record
+    const { error: deleteErr } = await svc
+      .from("attendance_records")
+      .delete()
+      .eq("id", id);
+
+    if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 400 });
+
+    // Log the deletion for audit purposes
+    const student = Array.isArray(existingRecord.students) ? existingRecord.students[0] : existingRecord.students;
+    const auditData = {
+      action: "delete_attendance",
+      target_type: "attendance_record",
+      target_id: id,
+      changes: {
+        student_id: existingRecord.student_id,
+        student_name: student?.student_name,
+        student_code: student?.code,
+        session_date: existingRecord.session_date,
+        deleted_by: admin.user_id,
+        deleted_at: new Date().toISOString()
+      }
+    };
+
+    // Optional: Insert audit log (if audit_logs table exists)
+    try {
+      await svc.from("audit_logs").insert(auditData);
+    } catch (auditErr) {
+      // Ignore audit errors to avoid blocking deletion
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Attendance record deleted successfully",
+      deleted_record: {
+        id: existingRecord.id,
+        student_name: student?.student_name,
+        student_code: student?.code,
+        session_date: existingRecord.session_date
+      }
+    });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}

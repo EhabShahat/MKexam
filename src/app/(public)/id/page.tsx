@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
+import { t } from "@/i18n/student";
 
 interface StudentSummary {
   student_id: string;
@@ -38,7 +39,7 @@ export default function PublicIdPage() {
     e.preventDefault();
     const n = nationalId.trim();
     if (!n) {
-      setError("Please enter a national number");
+      setError(t(locale, "enter_national_id_error"));
       return;
     }
     setError(null);
@@ -48,17 +49,17 @@ export default function PublicIdPage() {
       const res = await fetch(`/api/public/students/by-national?national_id=${encodeURIComponent(n)}`);
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(j?.error || "Not found");
+        setError(j?.error || t(locale, "not_found_error"));
         return;
       }
       const s = j?.student as StudentSummary | null;
       if (!s) {
-        setError("Not found");
+        setError(t(locale, "not_found_error"));
         return;
       }
       setStudent(s);
     } catch (err: any) {
-      setError(err?.message || "Failed to search");
+      setError(err?.message || t(locale, "search_failed_error"));
     } finally {
       setLoading(false);
     }
@@ -69,14 +70,14 @@ export default function PublicIdPage() {
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="flex flex-col items-center mb-8">
           <BrandLogo useAppSettings={true} size="lg" />
-          <h1 className="mt-4 text-2xl font-bold text-gray-900">Public ID</h1>
-          <p className="mt-2 text-gray-600">Enter your national number to view your ID card</p>
+          <h1 className="mt-4 text-2xl font-bold text-gray-900">{t(locale, "public_id_title")}</h1>
+          <p className="mt-2 text-gray-600">{t(locale, "enter_national_number")}</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <label htmlFor="national-id" className="block text-sm font-semibold text-gray-700 mb-2">National Number</label>
+              <label htmlFor="national-id" className="block text-sm font-semibold text-gray-700 mb-2">{t(locale, "national_number_label")}</label>
               <input
                 id="national-id"
                 type="text"
@@ -97,7 +98,7 @@ export default function PublicIdPage() {
               className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg"
               disabled={loading || nationalId.trim().length === 0}
             >
-              {loading ? "Searching..." : "Find ID"}
+              {loading ? t(locale, "searching_button") : t(locale, "find_id_button")}
             </button>
           </form>
         </div>
@@ -109,6 +110,7 @@ export default function PublicIdPage() {
               fullName={student.student_name || ""}
               code={student.code}
               brandLogoUrl={(settings?.brand_logo_url as string) || null}
+              locale={locale}
             />
           </div>
         )}
@@ -117,9 +119,23 @@ export default function PublicIdPage() {
   );
 }
 
-function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code: string; brandLogoUrl: string | null }) {
+function IdCardCanvas({ fullName, code, brandLogoUrl, locale }: { fullName: string; code: string; brandLogoUrl: string | null; locale: any }) {
   const cardRef = useRef<HTMLCanvasElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [settings, setSettings] = useState<any>({});
+
+  // Fetch settings for brand name
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/public/settings");
+        if (res.ok) {
+          const data = await res.json();
+          setSettings(data || {});
+        }
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -127,11 +143,13 @@ function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code
       const QRCode = (await import("qrcode")).default;
       if (!cardRef.current) return;
       const canvas = cardRef.current;
-      const card = { width: 720, height: 960 };
+      const card = { width: 450, height: 600 };
       canvas.width = card.width;
       canvas.height = card.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      const brandName = settings?.brand_name || "";
 
       // Background gradient
       const grad = ctx.createLinearGradient(0, 0, 0, card.height);
@@ -154,9 +172,42 @@ function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code
       }
       ctx.globalAlpha = 1;
 
+      // Calculate vertical centering
+      const totalContentHeight = 
+        40 + // Arabic text height
+        (brandName ? 30 : 0) + // Brand name height (if present)
+        100   + // Gap after header text
+        340 + 20 + // QR container height
+        20 + // Gap after QR
+        32 + // Name text height
+        10 + // Gap between name and code
+        24; // Code text height
+      
+      const startY = (card.height - totalContentHeight) / 2;
+      let currentY = startY;
+
+      // Header text above QR code
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      
+      // Arabic cathedral text
+      ctx.font = "600 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan'";
+      ctx.fillText("كاتدرائية مارمينا والبابا كيرلس", card.width / 2, currentY + 30);
+      currentY += 40;
+      
+      // Brand name (if available)
+      if (brandName) {
+        ctx.font = "500 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+        ctx.fillText(brandName, card.width / 2, currentY + 20);
+        currentY += 30;
+      }
+
+      // Gap after header text
+      currentY += 100;
+
       // QR code
       const qrText = code || "";
-      const qrSize = 420;
+      const qrSize = 340;
       const off = document.createElement("canvas");
       off.width = qrSize;
       off.height = qrSize;
@@ -171,9 +222,9 @@ function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code
       const qrContainerW = qrSize + 20;
       const qrContainerH = qrSize + 20;
       const qrContainerX = (card.width - qrContainerW) / 2;
-      const qrContainerY = 180;
+      const qrContainerY = currentY;
       roundRect(ctx, qrContainerX, qrContainerY, qrContainerW, qrContainerH, 28);
-      ctx.fillStyle = "rgba(255,255,255,.8)";
+      ctx.fillStyle = "#ffffff";
       ctx.fill();
 
       // Draw QR
@@ -192,33 +243,38 @@ function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy, logoR + 10, 0, Math.PI * 2);
-            ctx.fillStyle = "#ffffff";
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
             ctx.fill();
             ctx.closePath();
             ctx.beginPath();
             ctx.arc(cx, cy, logoR, 0, Math.PI * 2);
             ctx.closePath();
             ctx.clip();
-            ctx.drawImage(img, cx - logoR, cy - logoR, logoR * 2, logoR * 2.5);
+            ctx.drawImage(img, cx - logoR, cy - logoR, logoR * 2, logoR * 2);
             ctx.restore();
           }
         } catch {}
       }
 
-      // Name and code
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "700 40px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-      ctx.textAlign = "center";
-      ctx.fillText(fullName || " ", card.width / 2, qrContainerY + qrContainerH + 80);
+      // Update currentY after QR container
+      currentY += qrContainerH + 20; // Gap after QR
 
-      ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      // Name text
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.textAlign = "center";
+      ctx.fillText(fullName || " ", card.width / 2, currentY + 25);
+      currentY += 42; // Name height + gap
+
+      // Code text
+      ctx.font = "600 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       ctx.fillStyle = "#d6e1ff";
-      ctx.fillText(code || " ", card.width / 2, qrContainerY + qrContainerH + 140);
+      ctx.fillText(code || " ", card.width / 2, currentY + 18);
 
       setReady(true);
     })();
     return () => { mounted = false; };
-  }, [fullName, code, brandLogoUrl]);
+  }, [fullName, code, brandLogoUrl, settings]);
 
   function download() {
     if (!cardRef.current) return;
@@ -248,13 +304,28 @@ function IdCardCanvas({ fullName, code, brandLogoUrl }: { fullName: string; code
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
-        <h3 className="text-sm font-semibold">ID Card</h3>
+        <h3 className="text-sm font-semibold">{t(locale, "id_card_title")}</h3>
         <div className="flex gap-2">
-          <button className="btn btn-primary" onClick={download} disabled={!ready}>Download PNG</button>
+          <button className="btn btn-primary" onClick={download} disabled={!ready}>{t(locale, "download_png_button")}</button>
         </div>
       </div>
       <div className="flex items-center justify-center p-4">
-        <canvas ref={cardRef} className="rounded-xl shadow-2xl border border-gray-200" />
+        <canvas 
+          ref={cardRef} 
+          width={450}
+          height={600}
+          style={{
+            width: 450,
+            height: 600,
+            minWidth: 450,
+            minHeight: 600,
+            maxWidth: 450,
+            maxHeight: 600,
+            display: "block",
+            flex: "0 0 auto",
+          }}
+          className="rounded-xl shadow-2xl border border-gray-200 shrink-0 grow-0 basis-auto" 
+        />
       </div>
     </div>
   );

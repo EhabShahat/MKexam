@@ -5,17 +5,20 @@ import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
+import { downloadArabicCSV, getBilingualHeader, formatArabicNumber, formatArabicDate } from "@/lib/exportUtils";
 import ModernCard from "@/components/admin/ModernCard";
 import ModernTable from "@/components/admin/ModernTable";
 import SearchInput from "@/components/admin/SearchInput";
 import ActionButton from "@/components/admin/ActionButton";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { ExamTypeMicroBadge } from "@/components/admin/ExamTypeSelector";
 
 interface Exam {
   id: string;
   title: string;
   status: string;
   access_type: string;
+  exam_type?: 'exam' | 'homework' | 'quiz';
 }
 
 interface Attempt {
@@ -89,48 +92,47 @@ export default function AdminResultsIndex() {
     const exams = visibleExams;
     const fields = visibleExtraFields;
     const rows = filteredAllRows as Array<{ name: string; code: string | null; scores: Record<string, number | null>; summary?: { overall_score: number | null } }>;
+    
+    // Create bilingual headers
     const headers = [
-      "Student",
-      "Code",
-      ...exams.map((e) => e.title),
-      ...fields.map((f) => f.label || f.key),
-      "Final",
+      getBilingualHeader("Student Name"),
+      getBilingualHeader("Code"),
+      ...exams.map((e) => e.title), // Keep exam titles as-is (may contain Arabic)
+      ...fields.map((f) => f.label || f.key), // Keep field labels as-is
+      getBilingualHeader("Total"),
     ];
-    const esc = (v: any) => {
-      if (v === null || v === undefined) return "";
-      const s = String(v);
-      return s.includes(",") || s.includes("\n") || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
-    const lines: string[] = [];
-    lines.push(headers.join(","));
-    for (const r of rows) {
-      const data = r.code ? (extrasByCode.get(r.code) || {}) : {};
+
+    // Prepare data with Arabic formatting
+    const data = rows.map((r) => {
+      const rowData = r.code ? (extrasByCode.get(r.code) || {}) : {};
+      
       const examsVals = exams.map((e) => {
         const v = r.scores?.[e.id];
-        return v == null || Number.isNaN(Number(v)) ? "" : Number(v).toFixed(2);
+        return v == null || Number.isNaN(Number(v)) ? "" : formatArabicNumber(Number(v));
       });
+      
       const extraVals = fields.map((f) => {
-        const v = (data as any)?.[f.key];
+        const v = (rowData as any)?.[f.key];
         if (v == null || v === "") return "";
-        if (f.type === 'boolean') return String(v);
+        if (f.type === 'boolean') return v ? "نعم / Yes" : "لا / No";
         const n = Number(v);
-        if (!Number.isNaN(n)) return Number(n).toFixed(2);
+        if (!Number.isNaN(n)) return formatArabicNumber(n);
         return String(v);
       });
-      const finalVal = r?.summary?.overall_score != null ? Number(r.summary.overall_score).toFixed(2) : "";
-      const line = [esc(r.name), esc(r.code ?? ""), ...examsVals.map(esc), ...extraVals.map(esc), esc(finalVal)];
-      lines.push(line.join(","));
-    }
-    const csv = "\ufeff" + lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `results_all_exams.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+      
+      const finalVal = r?.summary?.overall_score != null ? formatArabicNumber(r.summary.overall_score) : "";
+      
+      return [r.name, r.code ?? "", ...examsVals, ...extraVals, finalVal];
+    });
+
+    // Use Arabic-compatible export
+    downloadArabicCSV({
+      filename: "results_all_exams",
+      headers,
+      data,
+      includeTimestamp: true,
+      rtlSupport: true
+    });
   };
 
   const handleExportAllXlsx = async () => {
@@ -335,9 +337,9 @@ export default function AdminResultsIndex() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success({ title: "Export Complete", message: "CSV file downloaded successfully" });
+      toast.success({ title: "اكتمل التصدير / Export Complete", message: "تم تحميل ملف CSV بنجاح / CSV file downloaded successfully" });
     } catch (e: any) {
-      toast.error({ title: "Export Failed", message: e?.message || "Unknown error" });
+      toast.error({ title: "فشل التصدير / Export Failed", message: e?.message || "خطأ غير معروف / Unknown error" });
     } finally {
       setExportingCsv(false);
     }
@@ -422,10 +424,10 @@ export default function AdminResultsIndex() {
   };
 
   const columns = [
-    { key: "student", label: "Student", width: "15vw" },
-    { key: "time", label: "Time", width: "15vw" },
-    { key: "score", label: "Score", width: "10vw", align: "center" as const },
-    { key: "ip", label: "IP Address", width: "10vw" },
+    { key: "student", label: "Student", width: "15vw", sortable: true, searchable: true },
+    { key: "time", label: "Time", width: "20vw", sortable: true },
+    { key: "score", label: "Score", width: "10vw", align: "center" as const, sortable: true },
+    { key: "ip", label: "IP Address", width: "5vw", searchable: true },
     { key: "actions", label: "Actions", width: "10vw" },
   ];
 
@@ -471,7 +473,17 @@ export default function AdminResultsIndex() {
     const extraCols = (extraFieldsQuery.data || []).filter((f) => !f.hidden).map((f) => ({ key: `extra_${f.key}`, label: f.label, align: "center" as const }));
     return [
       { key: "student", label: "Student", width: "15vw" },
-      ...exams.map((ex) => ({ key: `exam_${ex.id}`, label: ex.title, align: "center" as const })),
+      ...exams.map((ex) => ({ 
+        key: `exam_${ex.id}`, 
+        label: ex.title,
+        align: "center" as const,
+        renderHeader: () => (
+          <div className="flex items-center justify-center gap-1">
+            <span>{ex.title}</span>
+            <ExamTypeMicroBadge type={ex.exam_type || "exam"} />
+          </div>
+        )
+      })),
       ...extraCols,
       { key: "final", label: "Final", align: "center" as const },
     ];
@@ -635,88 +647,187 @@ export default function AdminResultsIndex() {
   
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Exam Results</h1>
-          <p className="text-gray-600 mt-1">View and analyze student exam attempts</p>
-        </div>
-        <div>
-          <Link href="/admin/extra-scores">
-            <ActionButton variant="secondary">Manage Extra Scores</ActionButton>
-          </Link>
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Exam Results
+              </h1></div>
+            <div className="flex items-center gap-3">
+              <Link href="/admin/extra-scores">
+                <ActionButton variant="secondary">Manage Extra Scores</ActionButton>
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Exam Selection */
-      }
-      <ModernCard>
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Exams
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setExamId(ALL)}
-                className={`px-3 py-2 rounded-lg border text-sm transition ${examId === ALL ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}
-              >
-                Select All
-              </button>
-              {visibleExams.map((exam) => (
-                <button
-                  key={exam.id}
-                  type="button"
-                  onClick={() => setExamId(exam.id)}
-                  className={`px-3 py-2 rounded-lg border text-sm transition ${examId === exam.id ? 'bg-blue-600 text-white border-blue-600 shadow' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}
-                >
-                  <span>{exam.title}</span>
-                  {exam.status === 'published' && (
-                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">
-                      Published
-                    </span>
-                  )}
-                </button>
-              ))}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        {/* Exam Selection */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            <h2 className="text-lg font-semibold text-gray-800">Select Exam</h2>
+            <div className="ml-auto text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              {visibleExams.length} available
             </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <button
+              type="button"
+              onClick={() => setExamId(ALL)}
+              className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                examId === ALL 
+                  ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-500 shadow-lg transform scale-105' 
+                  : 'bg-white text-gray-800 border-gray-200 hover:border-blue-300 hover:shadow-md hover:scale-102'
+              }`}
+            >
+              <div className="flex items-center justify-center mb-2">
+                <svg className={`w-6 h-6 ${examId === ALL ? 'text-white' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14-4H3m16 8H5m14 4H3" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold">All Exams</div>
+                <div className={`text-xs mt-1 ${examId === ALL ? 'text-blue-100' : 'text-gray-500'}`}>
+                  Aggregated view
+                </div>
+              </div>
+              {examId === ALL && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+              )}
+            </button>
+            
+            {visibleExams.map((exam) => (
+              <button
+                key={exam.id}
+                type="button"
+                onClick={() => setExamId(exam.id)}
+                className={`group relative p-4 rounded-xl border-2 transition-all duration-200 ${
+                  examId === exam.id 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-500 shadow-lg transform scale-105' 
+                    : 'bg-white text-gray-800 border-gray-200 hover:border-blue-300 hover:shadow-md hover:scale-102'
+                }`}
+              >
+                <div className="flex items-center justify-center mb-2">
+                  <svg className={`w-6 h-6 ${examId === exam.id ? 'text-white' : 'text-indigo-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    <div className="font-semibold text-sm leading-tight">{exam.title}</div>
+                    <ExamTypeMicroBadge type={exam.exam_type || "exam"} />
+                  </div>
+                  <div className="flex items-center justify-center gap-1">
+                    {exam.status === 'published' && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        examId === exam.id 
+                          ? 'bg-green-400 text-green-900' 
+                          : 'bg-green-100 text-green-700'
+                      }`}>
+                        Published
+                      </span>
+                    )}
+                    {exam.status === 'done' && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        examId === exam.id 
+                          ? 'bg-gray-300 text-gray-800' 
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        Completed
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {examId === exam.id && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                )}
+              </button>
+            ))}
           </div>
         </div>
-      </ModernCard>
 
-      {examId === ALL ? (
-        <ModernCard>
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
-            <div className="flex-1">
-              <SearchInput placeholder="Search by name or code..." value={allSearch} onChange={setAllSearch} />
-            </div>
-            <div className="flex items-end gap-2">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                Passed {passCounts.passed}/{passCounts.total}
-              </span>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Sort</label>
-                <select className="input" value={allScoreSort} onChange={(e) => setAllScoreSort(e.target.value as any)}>
-                  <option value="none">None</option>
-                  <option value="finalDesc">Final: Highest first</option>
-                  <option value="finalAsc">Final: Lowest first</option>
-                </select>
-              </div>
-              <ActionButton variant="secondary" onClick={handleExportAllCsv}>Export CSV</ActionButton>
-              <ActionButton variant="secondary" onClick={handleExportAllXlsx}>Export XLSX</ActionButton>
-            </div>
-          </div>
-          <ModernTable
-            columns={columnsAll}
-            data={sortedAllRows}
-            renderCell={(row: any, col: any) => {
-              if (col.key === 'student') return (
-                <div className="flex flex-col">
-                  <span>{row.name}</span>
-                  {row.code ? <span className="text-xs text-gray-500">{row.code}</span> : null}
+        {examId === ALL ? (
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <h2 className="text-lg font-semibold text-gray-800">All Exams Overview</h2>
                 </div>
-              );
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 border border-green-200 rounded-full">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium text-green-700">
+                      {passCounts.passed}/{passCounts.total} Passed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Controls */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <SearchInput placeholder="Search by name or code..." value={allSearch} onChange={setAllSearch} />
+                </div>
+                <div className="flex items-end gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sort by Final Score</label>
+                    <select 
+                      className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" 
+                      value={allScoreSort} 
+                      onChange={(e) => setAllScoreSort(e.target.value as any)}
+                    >
+                      <option value="none">No sorting</option>
+                      <option value="finalDesc">Highest first</option>
+                      <option value="finalAsc">Lowest first</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <ActionButton variant="secondary" onClick={handleExportAllCsv}>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export CSV
+                    </ActionButton>
+                    <ActionButton variant="secondary" onClick={handleExportAllXlsx}>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export XLSX
+                    </ActionButton>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <ModernTable
+                columns={columnsAll}
+                data={sortedAllRows}
+                renderCell={(row: any, col: any) => {
+                  if (col.key === 'student') return (
+                    <div className="flex flex-col">
+                      <span className="font-medium">{row.name}</span>
+                      {row.code ? <span className="text-xs text-gray-500">{row.code}</span> : null}
+                    </div>
+                  );
               if (col.key.startsWith('exam_')) {
                 const exId = col.key.slice(5);
                 const v = row.scores?.[exId];
@@ -760,88 +871,199 @@ export default function AdminResultsIndex() {
                 );
               }
               return null;
-            }}
-            loading={allAttemptsQuery.isLoading || extraFieldsQuery.isLoading || summariesQuery.isLoading || settingsQuery.isLoading || passExamsQuery.isLoading}
-            emptyMessage={sortedAllRows.length ? undefined : 'No attempts found across exams'}
-          />
-        </ModernCard>
-      ) : (
-        <ModernCard>
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
-            <div className="flex-1">
-              <SearchInput placeholder="Search student..." value={studentFilter} onChange={setStudentFilter} />
-            </div>
-            <div className="flex items-end gap-2">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Start date</label>
-                <input type="date" className="input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">End date</label>
-                <input type="date" className="input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Sort by score</label>
-                <select className="input" value={scoreSort} onChange={(e) => setScoreSort(e.target.value as any)}>
-                  <option value="none">None</option>
-                  <option value="desc">Highest first</option>
-                  <option value="asc">Lowest first</option>
-                </select>
-              </div>
-              <ActionButton variant="secondary" onClick={clearFilters}>Clear</ActionButton>
-              <ActionButton variant="secondary" onClick={handleExportCsv} loading={exportingCsv}>Export CSV</ActionButton>
-              <ActionButton variant="secondary" onClick={handleExportXlsx} loading={exportingXlsx}>Export XLSX</ActionButton>
-              <ActionButton variant="primary" onClick={handleRegradeAll} loading={regradingAll}>Regrade all</ActionButton>
+                }}
+                loading={allAttemptsQuery.isLoading || extraFieldsQuery.isLoading || summariesQuery.isLoading || settingsQuery.isLoading || passExamsQuery.isLoading}
+                emptyMessage={sortedAllRows.length ? undefined : 'No attempts found across exams'}
+              />
             </div>
           </div>
-          <ModernTable
-            columns={columns}
-            data={sortedAttempts}
-            renderCell={renderCell}
-            loading={attemptsQuery.isLoading}
-            emptyMessage={sortedAttempts.length ? undefined : 'No attempts found'}
-          />
-        </ModernCard>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center mb-4">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        ) : (
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-lg font-medium text-gray-900">Delete Attempt</h3>
+                <h2 className="text-lg font-semibold text-gray-800">Individual</h2>
+                <div className="ml-auto text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                  {sortedAttempts.length} attempts
+                </div>
               </div>
             </div>
-            <div className="mb-4">
-              <p className="text-sm text-gray-500">
-                Are you sure you want to delete this attempt? This action cannot be undone and will permanently remove all associated data including answers and scores.
-              </p>
+            
+            {/* Controls */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <SearchInput placeholder="Search student..." value={studentFilter} onChange={setStudentFilter} />
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                    <input 
+                      type="date" 
+                      className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                      value={startDate} 
+                      onChange={(e) => setStartDate(e.target.value)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                    <input 
+                      type="date" 
+                      className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                      value={endDate} 
+                      onChange={(e) => setEndDate(e.target.value)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sort by Score</label>
+                    <select 
+                      className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                      value={scoreSort} 
+                      onChange={(e) => setScoreSort(e.target.value as any)}
+                    >
+                      <option value="none">No sorting</option>
+                      <option value="desc">Highest first</option>
+                      <option value="asc">Lowest first</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* Mobile: Stack buttons in a grid */}
+                    <div className="grid grid-cols-2 gap-2 sm:hidden">
+                      <ActionButton variant="secondary" onClick={clearFilters} className="text-xs px-2 py-2">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Clear
+                      </ActionButton>
+                      <Link href={`/admin/results/analysis/${examId}`} className="block">
+                        <ActionButton variant="secondary" className="w-full text-xs px-2 py-2">
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          Analytics
+                        </ActionButton>
+                      </Link>
+                      <ActionButton variant="secondary" onClick={handleExportCsv} loading={exportingCsv} className="text-xs px-2 py-2">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        CSV
+                      </ActionButton>
+                      <ActionButton variant="secondary" onClick={handleExportXlsx} loading={exportingXlsx} className="text-xs px-2 py-2">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        XLSX
+                      </ActionButton>
+                      <ActionButton variant="primary" onClick={handleRegradeAll} loading={regradingAll} className="text-xs px-2 py-2 col-span-2">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Regrade All
+                      </ActionButton>
+                    </div>
+
+                    {/* Desktop: Horizontal layout */}
+                    <div className="hidden sm:flex gap-2 flex-wrap">
+                      <ActionButton variant="secondary" onClick={clearFilters}>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Clear
+                      </ActionButton>
+                      <Link href={`/admin/results/analysis/${examId}`}>
+                        <ActionButton variant="secondary">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          Analytics
+                        </ActionButton>
+                      </Link>
+                      <ActionButton variant="secondary" onClick={handleExportCsv} loading={exportingCsv}>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        CSV
+                      </ActionButton>
+                      <ActionButton variant="secondary" onClick={handleExportXlsx} loading={exportingXlsx}>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        XLSX
+                      </ActionButton>
+                      <ActionButton variant="primary" onClick={handleRegradeAll} loading={regradingAll}>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Regrade All
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-end gap-3">
-              <ActionButton
-                variant="secondary"
-                onClick={() => setDeleteConfirm(null)}
-                disabled={deleting === deleteConfirm}
-              >
-                Cancel
-              </ActionButton>
-              <ActionButton
-                variant="danger"
-                onClick={() => deleteAttempt(deleteConfirm)}
-                loading={deleting === deleteConfirm}
-              >
-                Delete Attempt
-              </ActionButton>
+            
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <ModernTable
+                columns={columns}
+                data={sortedAttempts}
+                renderCell={renderCell}
+                loading={attemptsQuery.isLoading}
+                emptyMessage={sortedAttempts.length ? undefined : 'No attempts found'}
+                variant="default"
+                sortable={true}
+                selectable={false}
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-2xl p-6 max-w-md w-full mx-4">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Delete Attempt</h3>
+                  <p className="text-sm text-gray-600 mt-1">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">
+                  Are you sure you want to delete this attempt? This will permanently remove all associated data including answers, scores, and submission history.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-3">
+                <ActionButton
+                  variant="secondary"
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting === deleteConfirm}
+                >
+                  Cancel
+                </ActionButton>
+                <ActionButton
+                  variant="danger"
+                  onClick={() => deleteAttempt(deleteConfirm)}
+                  loading={deleting === deleteConfirm}
+                >
+                  Delete Attempt
+                </ActionButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

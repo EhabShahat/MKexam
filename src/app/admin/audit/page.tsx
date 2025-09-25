@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
+import { downloadArabicCSV, getBilingualHeader, formatArabicDate, formatArabicTime } from "@/lib/exportUtils";
 import ModernCard from "@/components/admin/ModernCard";
 import ModernTable from "@/components/admin/ModernTable";
 import SearchInput from "@/components/admin/SearchInput";
@@ -46,40 +47,36 @@ export default function AdminAuditPage() {
   });
 
   const exportCsv = () => {
-    const headers = ["created_at", "actor", "action", "resource_type", "resource_id", "meta"];
-    const escapeValue = (value: any) => {
-      if (value === null || value === undefined) return "";
-      const str = String(value);
-      if (str.includes("\"") || str.includes(",") || str.includes("\n")) {
-        return '"' + str.replaceAll('"', '""') + '"';
-      }
-      return str;
-    };
+    // Create bilingual headers
+    const headers = [
+      getBilingualHeader("Date"),
+      getBilingualHeader("Time"),
+      "المستخدم / Actor",
+      "الإجراء / Action", 
+      "نوع المورد / Resource Type",
+      "معرف المورد / Resource ID",
+      "التفاصيل / Details"
+    ];
     
-    const lines: string[] = [];
-    lines.push(headers.join(","));
-    
-    for (const log of data || []) {
-      lines.push([
-        escapeValue(log.created_at),
-        escapeValue(log.actor),
-        escapeValue(log.action),
-        escapeValue(log.resource_type),
-        escapeValue(log.resource_id),
-        escapeValue(JSON.stringify(log.meta)),
-      ].join(","));
-    }
-    
-    const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    // Prepare data with Arabic formatting
+    const exportData = (data || []).map((log) => [
+      formatArabicDate(log.created_at),
+      formatArabicTime(log.created_at),
+      log.actor,
+      log.action,
+      log.resource_type || "",
+      log.resource_id || "",
+      log.meta ? JSON.stringify(log.meta) : ""
+    ]);
+
+    // Use Arabic-compatible export
+    downloadArabicCSV({
+      filename: "audit_logs",
+      headers,
+      data: exportData,
+      includeTimestamp: true,
+      rtlSupport: true
+    });
   };
 
   const clearFilters = () => {

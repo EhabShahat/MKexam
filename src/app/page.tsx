@@ -26,6 +26,7 @@ import Link from "next/link";
       "system_disabled_message",
       "home_button_exams",
       "home_button_results",
+      "home_button_register",
     ]);
 
   type AppConfigRow = { key: string; value: string | null };
@@ -41,22 +42,28 @@ import Link from "next/link";
   // Prefer explicit toggles when present; otherwise infer from mode
   const examsToggle = cfgMap.get("home_button_exams");
   const resultsToggle = cfgMap.get("home_button_results");
+  const registerToggle = cfgMap.get("home_button_register");
   const showExams = mode === "disabled"
     ? false
     : (examsToggle != null ? examsToggle === "true" : mode === "exam");
   const showResults = mode === "disabled"
     ? false
     : (resultsToggle != null ? resultsToggle === "true" : mode === "results");
+  const showRegister = mode === "disabled"
+    ? false
+    : (registerToggle === "true");
 
   // Determine responsive layout based on how many cards are visible
-  const visibleCount = (showExams ? 1 : 0) + (showResults ? 1 : 0) + (mode === "disabled" ? 0 : 1); // +1 for Public ID when not disabled
+  const visibleCount = (showExams ? 1 : 0) + (showResults ? 1 : 0) + (showRegister ? 1 : 0) + (mode === "disabled" ? 0 : 1); // +1 for Public ID when not disabled
   const containerMaxW = mode === "disabled"
     ? "max-w-xl"
     : visibleCount === 1
       ? "max-w-md"
       : visibleCount === 2
         ? "max-w-2xl"
-        : "max-w-3xl";
+        : visibleCount === 3
+          ? "max-w-3xl"
+          : "max-w-4xl";
 
   return (
     <PublicLocaleProvider>
@@ -67,6 +74,7 @@ import Link from "next/link";
             disabledMessage={disabledMessage}
             showExams={showExams}
             showResults={showResults}
+            showRegister={showRegister}
           />
         </div>
       </main>

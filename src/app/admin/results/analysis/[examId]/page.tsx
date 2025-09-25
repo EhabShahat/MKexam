@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { authFetch } from "@/lib/authFetch";
+import { downloadArabicCSV, getBilingualHeader, getBilingualValue, formatArabicNumber } from "@/lib/exportUtils";
+import { ExamTypeMicroBadge } from "@/components/admin/ExamTypeSelector";
 import {
   Chart as ChartJS,
   BarElement,
@@ -164,31 +166,55 @@ export default function AnalysisPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <h1 className="text-xl font-semibold">Per-question Analysis</h1>
-        {selectedExam && <span className="text-sm text-gray-600">{selectedExam.title}</span>}
+        {selectedExam && (
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-gray-600">{selectedExam.title}</span>
+            <ExamTypeMicroBadge type={(selectedExam as any).exam_type || "exam"} />
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Link href={`/admin/results`} className="btn btn-sm">Back</Link>
           {analysisQ.data && (
             <button
               className="btn btn-sm"
               onClick={() => {
-                const header = ["questionId","question_text","question_type","autoGradable","total","answered","correct","correct_rate"].join(",");
-                const lines = analysisQ.data.rows.map((r: any) => {
+                // Create bilingual headers
+                const headers = [
+                  getBilingualHeader("Question #"),
+                  getBilingualHeader("Question Text"),
+                  getBilingualHeader("Type"),
+                  "تصحيح تلقائي / Auto Gradable",
+                  getBilingualHeader("Total"),
+                  "أجاب / Answered",
+                  "صحيح / Correct",
+                  "معدل الصحة / Correct Rate"
+                ];
+
+                // Prepare data with Arabic formatting
+                const data = analysisQ.data.rows.map((r: any) => {
                   const rate = r.total ? (r.correct / r.total) : 0;
-                  const esc = (s: string) => '"' + String(s).replace(/"/g, '""') + '"';
-                  return [r.questionId, esc(r.question_text), r.question_type, r.autoGradable, r.total, r.answered, r.correct, rate.toFixed(3)].join(",");
+                  return [
+                    r.questionId,
+                    r.question_text,
+                    getBilingualValue(r.question_type),
+                    r.autoGradable ? "نعم / Yes" : "لا / No",
+                    formatArabicNumber(r.total),
+                    formatArabicNumber(r.answered),
+                    formatArabicNumber(r.correct),
+                    formatArabicNumber(rate * 100) + "%"
+                  ];
                 });
-                const csv = [header, ...lines].join("\n");
-                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `analysis_${examId}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
+
+                // Use Arabic-compatible export
+                downloadArabicCSV({
+                  filename: `analysis_${examId}`,
+                  headers,
+                  data,
+                  includeTimestamp: true,
+                  rtlSupport: true
+                });
               }}
-            >Export CSV</button>
+            >تصدير CSV / Export CSV</button>
           )}
           {analysisQ.data && (
             <button

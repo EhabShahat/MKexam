@@ -29,23 +29,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center gap-8">
                 <Link href="/admin" className="flex items-center gap-3 font-bold text-xl text-gray-900 hover:text-blue-600 transition-colors">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold shadow-lg">
-                    A
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold shadow-lg text-sm">
+                    Je
                   </div>
-                  <span className="hidden sm:block">Admin Panel</span>
                 </Link>
 
                 {/* Desktop Navigation */}
                 <nav className="hidden lg:flex items-center gap-1" aria-label="Admin navigation">
                   {/* Core Navigation Group */}
                   <div className="flex items-center gap-1 mr-2">
-                    <NavLink href="/admin" exact>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
-                      </svg>
-                      Dashboard
-                    </NavLink>
                     <NavLink href="/admin/students">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -122,13 +114,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <div className="lg:hidden bg-white border-t border-gray-200 shadow-md">
               <div className="max-w-7xl mx-auto px-4 py-3 space-y-1">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pt-2 pb-1">Core</h3>
-                <MobileNavLink href="/admin" exact>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z" />
-                  </svg>
-                  Dashboard
-                </MobileNavLink>
                 <MobileNavLink href="/admin/scanner">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7V5a1 1 0 011-1h2M20 7V5a1 1 0 00-1-1h-2M4 17v2a1 1 0 001 1h2M20 17v2a1 1 0 01-1 1h-2" />
@@ -165,8 +150,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           )}
         </header>
         )}
-        <main id="main-content" tabIndex={-1} className="outline-none w-[95%] sm:w-[95%] md:w-[95%] lg:w-full mx-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">{children}</div>
+        <main id="main-content" tabIndex={-1} className="outline-none w-full">
+          {children}
         </main>
       </div>
     </AdminGuard>

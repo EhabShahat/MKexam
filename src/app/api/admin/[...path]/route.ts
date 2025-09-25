@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Admin APIs should run on Node runtime (uses jose, etc.)
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30; // Limit duration for admin functions
 
 async function getSegments(ctx: { params: Promise<{ path?: string[] }> }): Promise<string[]> {
   const { path = [] } = await ctx.params;
@@ -57,7 +58,44 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         if (sub === "fields" && sub2 === "values") return mod.extraScoresFieldsValuesGET(req);
         if (sub === "fields") return mod.extraScoresFieldsGET(req);
         if (sub === "exams") return mod.extraScoresExamsGET(req);
+        if (sub === "attendance") {
+          const mod2 = await import("@/server/admin/extraScores");
+          return mod2.extraScoresAttendanceGET(req);
+        }
+        if (sub === "exam-tags") return mod.extraScoresExamTagsGET(req);
         return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+      case "attendance": {
+        const mod = await import("@/server/admin/attendance");
+        const url = new URL(req.url);
+        const action = url.searchParams.get("action");
+        
+        switch (action) {
+          case "recent":
+            return mod.attendanceRecentGET(req);
+          case "history":
+            return mod.attendanceHistoryGET(req);
+          case "today-count":
+            return mod.attendanceTodayCountGET(req);
+          default:
+            return NextResponse.json({ error: "Invalid action. Use: recent, history, today-count" }, { status: 400 });
+        }
+      }
+      case "audit-logs": {
+        const mod = await import("@/server/admin/auditLogs");
+        return mod.auditLogsGET(req);
+      }
+      case "monitoring": {
+        const mod = await import("@/server/admin/monitoring");
+        return mod.monitoringGET(req);
+      }
+      case "answer-keys": {
+        const mod = await import("@/server/admin/answerKeys");
+        return mod.answerKeysGET(req);
+      }
+      case "system": {
+        const mod = await import("@/server/admin/system");
+        return mod.systemGET(req);
       }
       case "summaries": {
         const mod = await import("@/server/admin/summaries");
@@ -70,11 +108,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         if (!id) {
           const mod = await import("@/server/admin/exams");
           return mod.examsGET(req);
-        }
-        // GET /exams/:id
-        if (!sub2) {
-          const mod = await import("@/server/admin/examsId");
-          return mod.examsIdGET(req, id);
         }
         if (sub2 === "questions") {
           const mod = await import("@/server/admin/examsQuestions");
@@ -96,7 +129,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
           if (sub3 === "export") return mod.examsIdAttemptsExportGET(req, id);
           return NextResponse.json({ error: "not_found" }, { status: 404 });
         }
-        return NextResponse.json({ error: "not_found" }, { status: 404 });
+        // Default GET /exams/:id
+        const mod = await import("@/server/admin/examsId");
+        return mod.examsIdGET(req, id);
       }
       default:
         return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -116,10 +151,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
     switch (root) {
       case "system": {
         const mod = await import("@/server/admin/system");
-        if (sub === "mode") return mod.systemModePOST(req);
-        if (sub === "enable") return mod.systemEnablePOST(req);
-        if (sub === "disable") return mod.systemDisablePOST(req);
-        return NextResponse.json({ error: "not_found" }, { status: 404 });
+        return mod.systemPOST(req);
       }
       case "blocked-entries": {
         const mod = await import("@/server/admin/blockedEntries");
@@ -157,6 +189,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
         if (sub === "bulk") return mod.studentsBulkPOST(req);
         if (sub === "clear") return mod.studentsClearPOST(req);
         if (sub === "whatsapp") return mod.studentsWhatsappPOST(req);
+        if (sub === "check-duplicates") return mod.studentsCheckDuplicatesPOST(req);
         // /students/:id/reset-attempts
         if (sub && segments[2] === "reset-attempts") return mod.studentsIdResetAttemptsPOST(req, sub);
         return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -182,7 +215,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
         if (sub === "fields") return mod.extraScoresFieldsPOST(req);
         if (sub === "exams") return mod.extraScoresExamsPOST(req);
         if (sub === "import") return mod.extraScoresImportPOST(req);
+        if (sub === "sync-attendance") {
+          const mod2 = await import("@/server/admin/extraScores");
+          return mod2.extraScoresSyncAttendancePOST(req);
+        }
+        if (sub === "sync-exam-tags") return mod.extraScoresSyncExamTagsPOST(req);
         return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+      case "attendance": {
+        const mod = await import("@/server/admin/attendance");
+        const url = new URL(req.url);
+        const action = url.searchParams.get("action");
+        
+        switch (action) {
+          case "scan":
+            return mod.attendanceScanPOST(req);
+          default:
+            return NextResponse.json({ error: "Invalid action. Use: scan" }, { status: 400 });
+        }
       }
       case "exams": {
         const id = sub;
@@ -287,6 +337,10 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path?: s
         if (sub === "fields") return mod.extraScoresFieldsDELETE(req);
         return NextResponse.json({ error: "not_found" }, { status: 404 });
       }
+      case "attendance": {
+        const mod = await import("@/server/admin/attendance");
+        return mod.attendanceDeleteDELETE(req);
+      }
       default:
         return NextResponse.json({ error: "method_not_allowed" }, { status: 405 });
     }
@@ -304,6 +358,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path?: st
       case "settings": {
         const mod = await import("@/server/admin/settings");
         return mod.settingsPATCH(req);
+      }
+      case "system": {
+        const mod = await import("@/server/admin/system");
+        return mod.systemPATCH(req);
       }
       case "students": {
         if (!sub) return NextResponse.json({ error: "student_id_required" }, { status: 400 });

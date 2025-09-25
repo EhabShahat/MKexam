@@ -10,13 +10,14 @@ export default function PublicHome(props: {
   disabledMessage: string | null;
   showExams: boolean;
   showResults: boolean;
+  showRegister: boolean;
 }) {
-  const { mode, disabledMessage, showExams, showResults } = props;
+  const { mode, disabledMessage, showExams, showResults, showRegister } = props;
   const { locale } = useStudentLocale();
 
   const showPublicId = mode !== "disabled";
-  const visibleCount = (showExams ? 1 : 0) + (showResults ? 1 : 0) + (showPublicId ? 1 : 0);
-  const gridColsSm = visibleCount === 1 ? "sm:grid-cols-1" : visibleCount === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3";
+  const visibleCount = (showExams ? 1 : 0) + (showResults ? 1 : 0) + (showRegister ? 1 : 0) + (showPublicId ? 1 : 0);
+  const gridColsSm = visibleCount === 1 ? "sm:grid-cols-1" : visibleCount === 2 ? "sm:grid-cols-2" : visibleCount === 3 ? "sm:grid-cols-3" : "sm:grid-cols-4";
 
   return (
     <>
@@ -64,6 +65,20 @@ export default function PublicHome(props: {
                   </div>
                   <div className="font-semibold text-indigo-900 text-lg text-center">{t(locale, "results")}</div>
                   <p className="text-sm text-indigo-800/80 mt-1">{t(locale, "search_your_results")}</p>
+                </div>
+              </Link>
+            )}
+
+            {showRegister && (
+              <Link href="/register" className="group">
+                <div className="h-full rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 transition-colors p-6 text-center shadow-sm">
+                  <div className=" h-12 mx-auto mb-3 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </div>
+                  <div className="font-semibold text-purple-900 text-lg text-center">{t(locale, "register")}</div>
+                  <p className="text-sm text-purple-800/80 mt-1">{t(locale, "apply_to_join")}</p>
                 </div>
               </Link>
             )}

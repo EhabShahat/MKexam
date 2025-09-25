@@ -86,8 +86,6 @@ export default function AdminExamsPage() {
     { key: "title", label: "Exam Title" },
     { key: "status", label: "Status", width: "120px" },
     { key: "access_type", label: "Access Type", width: "120px" },
-    { key: "questions", label: "Questions", width: "100px", align: "center" as const },
-    { key: "attempts", label: "Attempts", width: "100px", align: "center" as const },
     { key: "created", label: "Created", width: "150px" },
     { key: "actions", label: "Actions", width: "200px" },
   ];
@@ -109,10 +107,6 @@ export default function AdminExamsPage() {
             {exam.access_type}
           </span>
         );
-      case "questions":
-        return <span className="font-medium">{exam.question_count || 0}</span>;
-      case "attempts":
-        return <span className="font-medium">{exam.attempt_count || 0}</span>;
       case "created":
         return exam.created_at ? new Date(exam.created_at).toLocaleDateString() : "-";
       case "actions":
@@ -120,9 +114,6 @@ export default function AdminExamsPage() {
           <div className="flex items-center gap-2">
             <Link href={`/admin/exams/${exam.id}/edit`}>
               <ActionButton variant="secondary" size="sm">Edit</ActionButton>
-            </Link>
-            <Link href={`/admin/exams/${exam.id}/questions`}>
-              <ActionButton variant="secondary" size="sm">Questions</ActionButton>
             </Link>
            
 

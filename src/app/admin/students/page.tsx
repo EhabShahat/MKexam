@@ -1,9 +1,17 @@
 "use client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import ModernCard from "@/components/admin/ModernCard";
+import ModernTable from "@/components/admin/ModernTable";
+import DataTable from "@/components/admin/DataTable";
+import SearchInput from "@/components/admin/SearchInput";
+import ActionButton from "@/components/admin/ActionButton";
+import StatusBadge from "@/components/admin/StatusBadge";
 import { useMemo, useState, useEffect, useRef, Fragment } from "react";
+import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
 import QRCode from "qrcode";
+import { useLocalNameDuplicateCheck, useLocalDuplicateCheck, DuplicateStudent } from "@/hooks/useLocalDuplicateCheck";
 
 interface Student {
   student_id: string;
@@ -13,6 +21,8 @@ interface Student {
   mobile_number2?: string | null;
   address?: string | null;
   national_id?: string | null;
+  photo_url?: string | null;
+  national_id_photo_url?: string | null;
   student_created_at: string;
   total_exams_attempted?: number;
   completed_exams?: number;
@@ -41,8 +51,14 @@ export default function GlobalStudentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [isAddStudentExpanded, setIsAddStudentExpanded] = useState(false);
   // Modal state for showing ID card popup
   const [idCardStudentId, setIdCardStudentId] = useState<string | null>(null);
+  const [photoModal, setPhotoModal] = useState<{ url: string; title: string } | null>(null);
+  // Edit modal state
+  const [editModalStudent, setEditModalStudent] = useState<Student | null>(null);
+  // Full-screen image viewer
+  const [fullScreenImage, setFullScreenImage] = useState<{ url: string; title: string } | null>(null);
   
   // Function to send WhatsApp message
   function sendWhatsApp(student: any) {
@@ -159,8 +175,11 @@ export default function GlobalStudentsPage() {
 
 
 
-  // Filters
+  // Filters and Pagination
   const [q, setQ] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return students;
@@ -171,6 +190,17 @@ export default function GlobalStudentsPage() {
     );
   }, [students, q]);
 
+  // Pagination logic
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedStudents = filtered.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q]);
+
   // Add single student
   const [newName, setNewName] = useState("");
   const [newMobile, setNewMobile] = useState("");
@@ -178,6 +208,13 @@ export default function GlobalStudentsPage() {
   const [newAddress, setNewAddress] = useState("");
   const [newNationalId, setNewNationalId] = useState("");
   const [newCode, setNewCode] = useState("");
+  
+  // Local duplicate detection using existing student data
+  const nameDuplicates = useLocalNameDuplicateCheck(newName, students || []);
+  const fullDuplicates = useLocalDuplicateCheck({
+    mobile_number: newMobile,
+    national_id: newNationalId,
+  }, students || []);
   const addStudent = useMutation({
     mutationFn: async () => {
       setActionError(null);
@@ -404,183 +441,383 @@ export default function GlobalStudentsPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <style jsx>{spinnerStyle}</style>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Global Students</h1>
-        <div className="text-sm text-gray-600">
-          Total: {students.length} students
-        </div>
-      </div>
-
-      {/* Action Error Display */}
-      {actionError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-red-800">{actionError}</span>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Student 
+              </h1></div>
+            <div className="flex items-center gap-4">
+              <Link 
+                href="/admin/requests"
+                className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <span className="text-sm font-medium text-orange-700">
+                  View Requests
+                </span>
+              </Link>
+              
             </div>
-            <button 
-              onClick={() => setActionError(null)}
-              className="text-red-600 hover:text-red-800"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         </div>
-      )}
+      </div>
 
-      <div className="card space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="label">Search</label>
-            <input 
-              className="input" 
-              placeholder="Search name, mobile or code" 
-              value={q} 
-              onChange={(e) => setQ(e.target.value)} 
-            />
-          </div>
-          <div>
-            <label className="label">Import CSV/XLSX (student_name, mobile_number, code, mobile_number2?, address?, national_id?)</label>
-            <input 
-              type="file" 
-              accept=".csv,.xlsx,.xls" 
-              onChange={(e) => e.target.files && handleFile(e.target.files[0])} 
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            {preview.length > 0 && (
-              <button className="btn" onClick={commitImport}>
-                Import {preview.length}
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        {/* Action Error Display */}
+        {actionError && (
+          <div className="bg-red-50/90 backdrop-blur-sm border border-red-200/50 rounded-2xl p-4 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-red-800 font-medium">Action Failed</p>
+                  <p className="text-red-700 text-sm">{actionError}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActionError(null)}
+                className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-            )}
-            <button 
-              className="btn btn-destructive" 
-              onClick={() => {
-                if (confirm("Clear ALL students? This will preserve historical exam data but remove all current students.")) {
-                  clearAll.mutate();
-                }
-              }}
-              disabled={clearAll.isPending}
-            >
-              {clearAll.isPending ? "Clearing..." : "Clear All"}
-            </button>
+            </div>
           </div>
-        </div>
-        {importErrors.length > 0 && (
-          <ul style={{ color: "var(--destructive)" }} className="text-sm list-disc pl-5">
-            {importErrors.map((er, i) => <li key={i}>{er}</li>)}
-          </ul>
         )}
-      </div>
 
-      <div className="card space-y-3">
-        <h2 className="font-semibold">Add Student</h2>
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div>
-            <label className="label">Name</label>
-            <input 
-              className="input" 
-              value={newName} 
-              onChange={(e) => setNewName(e.target.value)} 
-            />
+        {/* Search & Import Controls */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h2 className="text-lg font-semibold text-gray-800">Search & Import</h2>
           </div>
-          <div>
-            <label className="label">Mobile</label>
-            <input 
-              className="input" 
-              value={newMobile} 
-              onChange={(e) => setNewMobile(e.target.value)} 
-            />
-          </div>
-          <div>
-            <label className="label">Mobile 2</label>
-            <input 
-              className="input" 
-              value={newMobile2} 
-              onChange={(e) => setNewMobile2(e.target.value)} 
-            />
-          </div>
-          <div>
-            <label className="label">Address</label>
-            <input 
-              className="input" 
-              value={newAddress} 
-              onChange={(e) => setNewAddress(e.target.value)} 
-            />
-          </div>
-          <div>
-            <label className="label">National ID</label>
-            <input 
-              className="input" 
-              value={newNationalId} 
-              onChange={(e) => setNewNationalId(e.target.value)} 
-            />
-          </div>
-          <div>
-            <label className="label">Code (optional)</label>
-            <input 
-              className="input" 
-              value={newCode} 
-              onChange={(e) => {
-                // Allow only numeric input for 4-digit codes
-                const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                setNewCode(value);
-              }}
-              placeholder="1234"
-              maxLength={4}
-              inputMode="numeric"
-            />
-          </div>
-          <div className="flex items-end">
-            <button 
-              className="btn btn-primary" 
-              onClick={() => {
-                if (!newMobile.trim()) {
-                  setActionError("Mobile number is required");
-                  return;
-                }
-                addStudent.mutate();
-              }} 
-              disabled={addStudent.isPending}
-            >
-              {addStudent.isPending ? "Adding..." : "Add"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  <div className="flex flex-col items-center justify-center">
-                    <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search Students</label>
+              <div className="relative">
+                <input 
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-gray-500" 
+                  placeholder="Search by name, mobile, or code..." 
+                  value={q} 
+                  onChange={(e) => setQ(e.target.value)} 
+                />
+                {q && (
+                  <button 
+                    onClick={() => setQ("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    <p className="text-lg font-medium">No students found</p>
-                    <p className="text-sm text-gray-400 mt-1">{q ? "Try a different search term" : "Add students to get started"}</p>
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* Import */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Import File</label>
+              <div className="relative">
+                <input 
+                  type="file" 
+                  accept=".csv,.xlsx,.xls" 
+                  onChange={(e) => e.target.files && handleFile(e.target.files[0])}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">CSV/XLSX</p>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Actions</label>
+              <div className="flex gap-2">
+                {preview.length > 0 && (
+                  <button 
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                    onClick={commitImport}
+                  >
+                    Import {preview.length}
+                  </button>
+                )}
+                <button 
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                  onClick={() => {
+                    if (confirm("Clear ALL students? This will preserve historical exam data but remove all current students.")) {
+                      clearAll.mutate();
+                    }
+                  }}
+                  disabled={clearAll.isPending}
+                >
+                  {clearAll.isPending ? "Clearing..." : "Clear All"}
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {importErrors.length > 0 && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-medium text-red-800">Import Errors</span>
+              </div>
+              <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
+                {importErrors.map((er, i) => <li key={i}>{er}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Add Student */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg overflow-visible">
+          <div 
+            className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-100 cursor-pointer hover:from-green-100 hover:to-emerald-100 transition-colors"
+            onClick={() => setIsAddStudentExpanded(!isAddStudentExpanded)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <h2 className="text-lg font-semibold text-gray-800">Add New Student</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  {isAddStudentExpanded ? 'Click to collapse' : 'Click to expand'}
+                </span>
+                <svg 
+                  className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${isAddStudentExpanded ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          {isAddStudentExpanded && (
+            <div className="p-6 space-y-6 overflow-visible">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-visible">
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+              <input 
+                className={`w-full px-3 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:border-transparent transition-all ${
+                  nameDuplicates.some(d => d.matchType === 'exact')
+                    ? 'border-red-300 focus:ring-red-500' 
+                    : nameDuplicates.length > 0
+                    ? 'border-yellow-300 focus:ring-yellow-500'
+                    : 'border-gray-200 focus:ring-green-500'
+                }`}
+                value={newName} 
+                onChange={(e) => setNewName(e.target.value)} 
+                placeholder="Student name"
+              />
+              
+              {/* Floating Name Duplicates Dropdown */}
+              {nameDuplicates.length > 0 && (
+                <NameDuplicatesDropdown 
+                  duplicates={nameDuplicates}
+                  isLoading={false}
+                  onSelectName={(selectedName) => setNewName(selectedName)}
+                />
+              )}
+              
+            </div>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mobile *</label>
+              <input 
+                className={`w-full px-3 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:border-transparent transition-all ${
+                  fullDuplicates.some(d => d.reasons.some(r => r.includes('number'))) 
+                    ? 'border-red-300 focus:ring-red-500' 
+                    : 'border-gray-200 focus:ring-green-500'
+                }`}
+                value={newMobile} 
+                onChange={(e) => setNewMobile(e.target.value)} 
+                placeholder="Mobile number"
+                type="tel"
+              />
+              
+              {/* Floating Mobile Duplicates Dropdown */}
+              {fullDuplicates.some(d => d.reasons.some(r => r.includes('number'))) && (
+                <MobileDuplicatesDropdown 
+                  duplicates={fullDuplicates.filter(d => d.reasons.some(r => r.includes('number')))}
+                  onSelectMobile={(selectedMobile) => setNewMobile(selectedMobile)}
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mobile 2</label>
+              <input 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
+                value={newMobile2} 
+                onChange={(e) => setNewMobile2(e.target.value)} 
+                placeholder="Alternative mobile"
+                type="tel"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+              <input 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
+                value={newAddress} 
+                onChange={(e) => setNewAddress(e.target.value)} 
+                placeholder="Address"
+              />
+            </div>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">National ID</label>
+              <input 
+                className={`w-full px-3 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:border-transparent transition-all ${
+                  fullDuplicates.some(d => d.reasons.some(r => r.includes('national'))) 
+                    ? 'border-red-300 focus:ring-red-500' 
+                    : 'border-gray-200 focus:ring-green-500'
+                }`}
+                value={newNationalId} 
+                onChange={(e) => setNewNationalId(e.target.value)} 
+                placeholder="National ID"
+              />
+              
+              {/* Floating National ID Duplicates Dropdown */}
+              {fullDuplicates.some(d => d.reasons.some(r => r.includes('national'))) && (
+                <NationalIdDuplicatesDropdown 
+                  duplicates={fullDuplicates.filter(d => d.reasons.some(r => r.includes('national')))}
+                  onSelectNationalId={(selectedId) => setNewNationalId(selectedId)}
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Code</label>
+              <div className="flex gap-2">
+                <input 
+                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
+                  value={newCode} 
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setNewCode(value);
+                  }}
+                  placeholder="1234"
+                  maxLength={4}
+                  inputMode="numeric"
+                />
+                <button 
+                  className={`px-4 py-2 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
+                    (nameDuplicates.some(d => d.matchType === 'exact') || 
+                     fullDuplicates.some(d => d.matchType === 'exact'))
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                  onClick={() => {
+                    if (!newMobile.trim()) {
+                      setActionError("Mobile number is required");
+                      return;
+                    }
+                    const hasExactDuplicate = nameDuplicates.some(d => d.matchType === 'exact') ||
+                                             fullDuplicates.some(d => d.matchType === 'exact');
+                    if (hasExactDuplicate) {
+                      if (!confirm("Exact duplicate found! Are you sure you want to add this student?")) {
+                        return;
+                      }
+                    }
+                    addStudent.mutate();
+                  }} 
+                  disabled={addStudent.isPending}
+                >
+                  {addStudent.isPending ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      {(nameDuplicates.some(d => d.matchType === 'exact') || 
+                       fullDuplicates.some(d => d.matchType === 'exact')) ? 'Add Anyway' : 'Add'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+              </div>
+              
+            </div>
+          )}
+        </div>
+
+        {/* Students Table */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <h2 className="text-lg font-semibold text-gray-800">Directory</h2>
+              </div>
+              <div className="flex items-center gap-3">
+                
+                {filtered.length > 0 && (
+                  <div className="text-xs text-gray-500">
+                     {startIndex + 1}-{Math.min(endIndex, filtered.length)} of {filtered.length}
                   </div>
-                </td>
-              </tr>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <tr>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Code</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Student</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Created</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {paginatedStudents.length === 0 && filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                          </svg>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-900 mb-1">No students found</p>
+                        <p className="text-sm text-gray-500">{q ? "Try a different search term" : "Add students to get started"}</p>
+                      </div>
+                    </td>
+                  </tr>
             ) : (
-              filtered.map((s) => {
+              paginatedStudents.map((s) => {
                 const studentId = s.student_id;
                 const e = edits[studentId] || {};
                 return (
@@ -590,7 +827,23 @@ export default function GlobalStudentsPage() {
                         <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono font-medium">{s.code}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-medium">{s.student_name || "-"}</span>
+                        <div className="flex items-center gap-2">
+                          {s.photo_url ? (
+                            <button
+                              type="button"
+                              className="w-8 h-8 rounded-full overflow-hidden border border-gray-200"
+                              title="View photo"
+                              onClick={() => setPhotoModal({ url: s.photo_url as string, title: s.student_name || "Student Photo" })}
+                            >
+                              <img src={s.photo_url || ""} alt="Photo" className="w-8 h-8 object-cover" />
+                            </button>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                              {((s.student_name || "-").trim()[0] || "-").toUpperCase()}
+                            </div>
+                          )}
+                          <span className="font-medium">{s.student_name || "-"}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div className="flex items-center">
@@ -626,136 +879,538 @@ export default function GlobalStudentsPage() {
                           </button>
                           <button
                             className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setExpanded((prev) => ({ ...prev, [studentId]: !prev[studentId] }))}
+                            onClick={() => setEditModalStudent(s)}
                           >
-                            {expanded[studentId] ? "Close" : "Edit"}
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
                           </button>
                         </div>
                       </td>
                     </tr>
-                    {expanded[studentId] && (
-                      <tr className="bg-gray-50/70">
-                        <td colSpan={4} className="px-6 py-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <div>
-                              <label className="label">Name</label>
-                              <input
-                                className="input"
-                                value={e.student_name ?? s.student_name ?? ""}
-                                onChange={(ev) => setEdit(studentId, { student_name: ev.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="label">Mobile</label>
-                              <input
-                                className="input"
-                                value={e.mobile_number ?? s.mobile_number ?? ""}
-                                onChange={(ev) => setEdit(studentId, { mobile_number: ev.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="label">Mobile 2</label>
-                              <input
-                                className="input"
-                                value={e.mobile_number2 ?? s.mobile_number2 ?? ""}
-                                onChange={(ev) => setEdit(studentId, { mobile_number2: ev.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="label">Address</label>
-                              <input
-                                className="input"
-                                value={e.address ?? s.address ?? ""}
-                                onChange={(ev) => setEdit(studentId, { address: ev.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="label">National ID</label>
-                              <input
-                                className="input"
-                                value={e.national_id ?? s.national_id ?? ""}
-                                onChange={(ev) => setEdit(studentId, { national_id: ev.target.value })}
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium" title="Total attempted">{s.total_exams_attempted || 0}</span>
-                              <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-sm font-medium" title="Completed">{s.completed_exams || 0}</span>
-                              <span className="px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium" title="In progress">{s.in_progress_exams || 0}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="btn btn-primary"
-                                onClick={() => {
-                                  const payload = edits[studentId] || {};
-                                  if (Object.keys(payload).length > 0) {
-                                    saveRow.mutate({ id: studentId, payload });
-                                  }
-                                }}
-                                disabled={saveRow.isPending || !edits[studentId] || Object.keys(edits[studentId]).length === 0}
-                              >
-                                {saveRow.isPending ? "Saving..." : "Save"}
-                              </button>
-                              <button
-                                className="btn bg-amber-600 hover:bg-amber-700 text-white"
-                                onClick={() => {
-                                  const total = s.total_exams_attempted || 0;
-                                  if (total === 0) return;
-                                  if (confirm(`Reset attempts for student ${s.code}? This removes per-exam attempt links so they can retake. Historical submissions remain.`)) {
-                                    resetAttempts.mutate({ id: studentId });
-                                  }
-                                }}
-                                disabled={resetAttempts.isPending || (s.total_exams_attempted || 0) === 0}
-                                title={(s.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
-                              >
-                                {resetAttempts.isPending ? "Resetting..." : "Reset Attempts"}
-                              </button>
-                              <button
-                                className="btn btn-destructive"
-                                onClick={() => {
-                                  if (confirm(`Delete student ${s.code}? This will PERMANENTLY delete all their attempts, results, activity logs and extra scores. This cannot be undone.`)) {
-                                    deleteRow.mutate(studentId);
-                                  }
-                                }}
-                                disabled={deleteRow.isPending}
-                              >
-                                {deleteRow.isPending ? "Deleting..." : "Delete"}
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 );
               })
             )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">Show:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="text-sm text-gray-600">per page</span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Edit Student Modal */}
+        {editModalStudent && (
+          <EditStudentModal
+            student={editModalStudent}
+            onClose={() => {
+              setEditModalStudent(null);
+              setEdits({}); // Clear any pending edits
+            }}
+            onSave={(studentId, payload) => {
+              saveRow.mutate({ id: studentId, payload });
+              setEditModalStudent(null);
+            }}
+            onResetAttempts={(studentId) => {
+              const total = editModalStudent.total_exams_attempted || 0;
+              if (total === 0) return;
+              if (confirm(`Reset attempts for student ${editModalStudent.code}? This removes per-exam attempt links so they can retake. Historical submissions remain.`)) {
+                resetAttempts.mutate({ id: studentId });
+              }
+            }}
+            onDelete={(studentId) => {
+              if (confirm(`Delete student ${editModalStudent.code}? This will PERMANENTLY delete all their attempts, results, activity logs and extra scores. This cannot be undone.`)) {
+                deleteRow.mutate(studentId);
+                setEditModalStudent(null);
+              }
+            }}
+            onImageClick={(url, title) => setFullScreenImage({ url, title })}
+            isSaving={saveRow.isPending}
+            isResetting={resetAttempts.isPending}
+            isDeleting={deleteRow.isPending}
+          />
+        )}
+
+        {/* Full-Screen Image Viewer */}
+        {fullScreenImage && (
+          <FullScreenImageViewer
+            url={fullScreenImage.url}
+            title={fullScreenImage.title}
+            onClose={() => setFullScreenImage(null)}
+          />
+        )}
+
+        {/* ID Card Modal (inline, no iframe) */}
+        {idCardStudentId && selectedStudent && (
+          <IdCardModal
+            student={selectedStudent}
+            brandLogoUrl={(publicSettings as any)?.brand_logo_url}
+            publicSettings={publicSettings}
+            onClose={() => setIdCardStudentId(null)}
+          />
+        )}
       </div>
-      {/* ID Card Modal (inline, no iframe) */}
-      {idCardStudentId && selectedStudent && (
-        <IdCardModal
-          student={selectedStudent}
-          brandLogoUrl={(publicSettings as any)?.brand_logo_url}
-          onClose={() => setIdCardStudentId(null)}
-        />
-      )}
     </div>
   );
 }
 
-function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
+// Full-Screen Image Viewer Component
+function FullScreenImageViewer({ 
+  url, 
+  title, 
+  onClose 
+}: { 
+  url: string; 
+  title: string; 
+  onClose: () => void; 
+}) {
+  return (
+    <div className="fixed inset-0 bg-black z-[60] flex items-center justify-center">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent z-10 p-4 sm:p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-white text-lg sm:text-xl font-semibold truncate mr-4">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-2 sm:p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors touch-manipulation"
+          >
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Image */}
+      <div className="w-full h-full flex items-center justify-center p-4 sm:p-8">
+        <img
+          src={url}
+          alt={title}
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          onClick={onClose}
+        />
+      </div>
+
+      {/* Bottom hint */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm">
+        Tap to close
+      </div>
+    </div>
+  );
+}
+
+// Edit Student Modal Component
+function EditStudentModal({
+  student,
+  onClose,
+  onSave,
+  onResetAttempts,
+  onDelete,
+  onImageClick,
+  isSaving,
+  isResetting,
+  isDeleting,
+}: {
+  student: Student;
+  onClose: () => void;
+  onSave: (studentId: string, payload: Partial<Student>) => void;
+  onResetAttempts: (studentId: string) => void;
+  onDelete: (studentId: string) => void;
+  onImageClick: (url: string, title: string) => void;
+  isSaving: boolean;
+  isResetting: boolean;
+  isDeleting: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    student_name: student.student_name || "",
+    mobile_number: student.mobile_number || "",
+    mobile_number2: student.mobile_number2 || "",
+    address: student.address || "",
+    national_id: student.national_id || "",
+  });
+
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Track changes
+  useEffect(() => {
+    const originalData = {
+      student_name: student.student_name || "",
+      mobile_number: student.mobile_number || "",
+      mobile_number2: student.mobile_number2 || "",
+      address: student.address || "",
+      national_id: student.national_id || "",
+    };
+    
+    setHasChanges(JSON.stringify(formData) !== JSON.stringify(originalData));
+  }, [formData, student]);
+
+  const handleChange = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleSave = () => {
+    if (hasChanges) {
+      onSave(student.student_id, formData);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-1 sm:p-4">
+      <div className="bg-white rounded-xl sm:rounded-3xl w-full max-w-4xl h-[98vh] sm:max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
+        
+        {/* Compact Header */}
+        <div className="px-3 sm:px-8 py-2 sm:py-6 bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg">
+                <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">Edit Student</h3>
+                <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Modify student information</p>
+              </div>
+            </div>
+            <button 
+              onClick={onClose}
+              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors touch-manipulation"
+            >
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Compact Student Image */}
+          <div className="flex justify-center mb-2 sm:mb-4">
+            {student.photo_url ? (
+              <button
+                onClick={() => onImageClick(student.photo_url!, student.student_name || "Student Photo")}
+                className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg sm:rounded-2xl overflow-hidden border-2 sm:border-4 border-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 touch-manipulation"
+              >
+                <img 
+                  src={student.photo_url} 
+                  alt={student.student_name || "Student"} 
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ) : (
+              <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg sm:rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-2 sm:border-4 border-white shadow-lg">
+                <svg className="w-8 h-8 sm:w-16 sm:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {/* Compact Student Info */}
+          <div className="text-center">
+            <div className="flex justify-center items-center gap-2 mb-1 sm:mb-2">
+              <span className="px-3 py-1 sm:px-4 sm:py-2 bg-blue-100 text-blue-800 rounded-lg sm:rounded-xl font-mono font-bold text-base sm:text-lg">
+                {student.code}
+              </span>
+            </div>
+            <h4 className="text-base sm:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
+              {student.student_name || "No Name"}
+            </h4>
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-1 sm:gap-4 text-xs sm:text-sm text-gray-600">
+              <div className="flex items-center gap-1">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs">{new Date(student.student_created_at).toLocaleDateString()}</span>
+              </div>
+              {/* Compact Stats */}
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                  {student.total_exams_attempted || 0}<span className="hidden sm:inline"> Attempted</span>
+                </span>
+                <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-medium">
+                  {student.completed_exams || 0}<span className="hidden sm:inline"> Completed</span>
+                </span>
+                <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-medium">
+                  {student.in_progress_exams || 0}<span className="hidden sm:inline"> Progress</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Form */}
+        <div className="p-3 sm:p-8 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            
+            {/* Student Name */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-semibold text-gray-800 mb-2">
+                Student Name
+              </label>
+              <input
+                type="text"
+                value={formData.student_name}
+                onChange={handleChange('student_name')}
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
+                placeholder="Enter student's full name"
+              />
+            </div>
+
+            {/* Mobile Number */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-800 mb-2">
+                Mobile Number
+              </label>
+              <input
+                type="tel"
+                value={formData.mobile_number}
+                onChange={handleChange('mobile_number')}
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
+                placeholder="Primary mobile number"
+              />
+            </div>
+
+            {/* Alternative Mobile */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-800 mb-2">
+                Alternative Mobile
+              </label>
+              <input
+                type="tel"
+                value={formData.mobile_number2}
+                onChange={handleChange('mobile_number2')}
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
+                placeholder="Alternative mobile number"
+              />
+            </div>
+
+            {/* National ID */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-800 mb-2">
+                National ID
+              </label>
+              <input
+                type="text"
+                value={formData.national_id}
+                onChange={handleChange('national_id')}
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
+                placeholder="National ID number"
+              />
+            </div>
+
+            {/* Address */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-800 mb-2">
+                Address
+              </label>
+              <input
+                type="text"
+                value={formData.address}
+                onChange={handleChange('address')}
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
+                placeholder="Student's address"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Mobile-First Footer */}
+        <div className="px-3 sm:px-8 py-3 sm:py-6 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+          {/* Mobile: Stacked Layout */}
+          <div className="block sm:hidden space-y-3">
+            {/* Primary Action Row */}
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors disabled:opacity-50 touch-manipulation"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges || isSaving}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed touch-manipulation"
+              >
+                {isSaving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-sm">Saving...</span>
+                  </span>
+                ) : (
+                  hasChanges ? "Save Changes" : "No Changes"
+                )}
+              </button>
+            </div>
+            
+            {/* Secondary Actions Row */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onResetAttempts(student.student_id)}
+                disabled={isResetting || (student.total_exams_attempted || 0) === 0}
+                className="flex-1 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed touch-manipulation"
+                title={(student.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake"}
+              >
+                {isResetting ? "Resetting..." : "Reset"}
+              </button>
+              
+              <button
+                onClick={() => onDelete(student.student_id)}
+                disabled={isDeleting}
+                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed touch-manipulation"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+
+          {/* Desktop: Original Layout */}
+          <div className="hidden sm:flex items-center justify-between w-full">
+            {/* Destructive Actions */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onResetAttempts(student.student_id)}
+                disabled={isResetting || (student.total_exams_attempted || 0) === 0}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
+                title={(student.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
+              >
+                {isResetting ? "Resetting..." : "Reset Attempts"}
+              </button>
+              
+              <button
+                onClick={() => onDelete(student.student_id)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
+              >
+                {isDeleting ? "Deleting..." : "Delete Student"}
+              </button>
+            </div>
+
+            {/* Save Actions */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onClose}
+                disabled={isSaving}
+                className="px-6 py-3 text-gray-700 hover:text-gray-900 font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges || isSaving}
+                className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving Changes...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {hasChanges ? "Save Changes" : "No Changes"}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IdCardModal({ student, brandLogoUrl, publicSettings, onClose }: { student: {
   student_id: string;
   code: string;
   student_name: string | null;
-}; brandLogoUrl?: string | null; onClose: () => void }) {
+  mobile_number: string | null;
+}; brandLogoUrl?: string | null; publicSettings?: any; onClose: () => void }) {
   const cardRef = useRef<HTMLCanvasElement | null>(null);
   const [ready, setReady] = useState(false);
 
   const fullName = student?.student_name || "";
   const code = student?.code || "";
+  const brandName = publicSettings?.brand_name || "";
 
   const card = {
     // Internal canvas resolution in pixels (kept numeric)
@@ -777,9 +1432,7 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
       // Internal buffer size (sharpness)
       canvas.width = card.width;
       canvas.height = card.height;
-      // Display size (responsive CSS) — avoids TS error from using vw/vh as numbers
-      canvas.style.width = "90vw";
-      canvas.style.height = "60vh";
+      // Fixed display size handled via JSX attributes to prevent stretching
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
@@ -802,6 +1455,39 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
       }
       ctx.globalAlpha = 1;
 
+      // Calculate vertical centering
+      const totalContentHeight = 
+        20 + // Arabic text height
+        (brandName ? 45 : 0) + // Brand name height (if present)
+        30 + // Gap after header text
+        420 + 20 + // QR container height
+        30 + // Gap after QR
+        50 + // Name text height
+        15 + // Gap between name and code
+        36; // Code text height
+      
+      const startY = (card.height - totalContentHeight) / 2;
+      let currentY = startY;
+
+      // Header text above QR code
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      
+      // Arabic cathedral text
+      ctx.font = "600 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan'";
+      ctx.fillText("كاتدرائية مارمينا والبابا كيرلس", card.width / 2,  100);
+      currentY += 60;
+      
+      // Brand name (if available)
+      if (brandName) {
+        ctx.font = "500 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+        ctx.fillText(brandName, card.width / 2, 150);
+        currentY += 30;
+      }
+
+      // Gap after header text
+      currentY += 100;
+
       // QR content
       const qrText = code || "";
 
@@ -821,7 +1507,7 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
       const qrContainerW = qrSize + 20;
       const qrContainerH = qrSize + 20;
       const qrContainerX = (card.width - qrContainerW) / 2;
-      const qrContainerY = 180;  //################## qrcode y position (top space) ##################
+      const qrContainerY = currentY;
       roundRect(ctx, qrContainerX, qrContainerY, qrContainerW, qrContainerH, 28);
       ctx.fillStyle = "rgba(255,255,255,.8)";
       ctx.fill();
@@ -857,22 +1543,26 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
         } catch {}
       }
 
+      // Update currentY after QR container
+      currentY += qrContainerH + 30; // Gap after QR
+
       // Name text
       ctx.fillStyle = "#ffffff";
       ctx.font = "700 40px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       ctx.textAlign = "center";
-      ctx.fillText(fullName || " ", card.width / 2, qrContainerY + qrContainerH + 80);
+      ctx.fillText(fullName || " ", card.width / 2, currentY + 35);
+      currentY += 65; // Name height + gap
 
       // Code text
       ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       ctx.fillStyle = "#d6e1ff";
-      ctx.fillText(code || " ", card.width / 2, qrContainerY + qrContainerH + 140);
+      ctx.fillText(code || " ", card.width / 2, currentY + 25);
 
       setReady(true);
     }
     draw();
     return () => { disposed = true; };
-  }, [brandLogoUrl, fullName, code]);
+  }, [brandLogoUrl, brandName, fullName, code]);
 
   const download = () => {
     if (!cardRef.current) return;
@@ -883,20 +1573,27 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
     a.click();
   };
 
-  const printCard = () => {
-    if (!cardRef.current) return;
-    const dataUrl = cardRef.current.toDataURL("image/png");
-    const w = window.open("");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>ID Card</title><style>
-      html,body{margin:0;padding:0}
-      .wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111}
-      img{max-width:100%;height:auto;}
-      @media print { .noprint{display:none} }
-    </style></head><body><div class="wrap"><img src="${dataUrl}"/></div></body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
+  const sendId = () => {
+    if (!cardRef.current || !student) return;
+    
+    // Download the ID card image
+    const url = cardRef.current.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(fullName || "student").replace(/\s+/g, "_")}_${code || "id"}.png`;
+    a.click();
+    
+    // Open WhatsApp if mobile number is available
+    if (student.mobile_number) {
+      const cleanNumber = student.mobile_number.replace(/\D/g, '');
+      const mobileNumber = cleanNumber.startsWith('0') 
+        ? cleanNumber.substring(1) 
+        : cleanNumber;
+      
+      const message = `اغابي ${fullName || ''}! دا الكرت بتاعك اللي هتحضر به، خليه ديما معاك: ${code}`;
+      const whatsappUrl = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
   };
 
   // modal UI
@@ -913,7 +1610,9 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
           <h3 className="text-sm font-semibold">Student ID Card</h3>
           <div className="flex items-center gap-2">
             <button className="btn" onClick={download} disabled={!ready}>Download PNG</button>
-            <button className="btn btn-primary" onClick={printCard} disabled={!ready}>Print</button>
+            <button className="btn btn-primary" onClick={sendId} disabled={!ready || !student?.mobile_number}>
+              Send ID
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 rounded hover:bg-gray-200 focus:outline-none"
@@ -926,9 +1625,373 @@ function IdCardModal({ student, brandLogoUrl, onClose }: { student: {
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
-          <canvas ref={cardRef} className="rounded-xl shadow-2xl border border-gray-200" />
+          <canvas
+            ref={cardRef}
+            width={450}
+            height={600}
+            style={{
+              width: 450,
+              height: 600,
+              minWidth: 450,
+              minHeight: 600,
+              maxWidth: 450,
+              maxHeight: 600,
+              display: "block",
+              flex: "0 0 auto",
+            }}
+            className="rounded-xl shadow-2xl border border-gray-200 shrink-0 grow-0 basis-auto"
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Fast floating dropdown for mobile duplicates
+function MobileDuplicatesDropdown({ 
+  duplicates, 
+  onSelectMobile 
+}: { 
+  duplicates: DuplicateStudent[];
+  onSelectMobile: (mobile: string) => void;
+}) {
+  return (
+    <div className="absolute top-full left-0 right-0 z-[99999] mt-1 bg-white border-2 border-red-300 rounded-lg shadow-2xl max-h-60 overflow-y-auto min-w-[300px]" 
+         style={{ boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' }}>
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-gray-100 bg-red-50 rounded-t-lg">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm font-medium text-gray-700">
+            Duplicate Mobile Numbers ({duplicates.length})
+          </span>
+        </div>
+      </div>
+
+      {/* Duplicate entries */}
+      <div className="py-1">
+        {duplicates.map((dup, idx) => (
+          <button
+            key={idx}
+            onClick={() => onSelectMobile(dup.student.mobile_number || '')}
+            className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors border-b border-gray-100 last:border-b-0"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-mono text-xs">
+                  {dup.student.code}
+                </span>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">
+                    {dup.student.student_name || 'No Name'}
+                  </p>
+                  <p className="text-xs text-red-600 font-medium">
+                    {dup.student.mobile_number || 'No Mobile'}
+                  </p>
+                </div>
+              </div>
+              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Footer hint */}
+      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 rounded-b-lg">
+        <p className="text-xs text-gray-500">
+          Click to use existing mobile number
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Fast floating dropdown for national ID duplicates
+function NationalIdDuplicatesDropdown({ 
+  duplicates, 
+  onSelectNationalId 
+}: { 
+  duplicates: DuplicateStudent[];
+  onSelectNationalId: (nationalId: string) => void;
+}) {
+  return (
+    <div className="absolute bottom-full left-0 right-0 z-[99999] mb-1 bg-white border-2 border-red-300 rounded-lg shadow-2xl max-h-60 overflow-y-auto min-w-[300px]" 
+         style={{ boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' }}>
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-gray-100 bg-red-50 rounded-t-lg">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm font-medium text-gray-700">
+            Duplicate National IDs ({duplicates.length})
+          </span>
+        </div>
+      </div>
+
+      {/* Duplicate entries */}
+      <div className="py-1">
+        {duplicates.map((dup, idx) => (
+          <button
+            key={idx}
+            onClick={() => onSelectNationalId(dup.student.national_id || '')}
+            className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors border-b border-gray-100 last:border-b-0"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-mono text-xs">
+                  {dup.student.code}
+                </span>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">
+                    {dup.student.student_name || 'No Name'}
+                  </p>
+                  <p className="text-xs text-red-600 font-medium">
+                    {dup.student.national_id || 'No National ID'}
+                  </p>
+                </div>
+              </div>
+              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Footer hint */}
+      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 rounded-b-lg">
+        <p className="text-xs text-gray-500">
+          Click to use existing national ID
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Fast floating dropdown for name duplicates
+function NameDuplicatesDropdown({ 
+  duplicates, 
+  isLoading, 
+  onSelectName 
+}: { 
+  duplicates: DuplicateStudent[];
+  isLoading: boolean;
+  onSelectName: (name: string) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+        <div className="flex items-center gap-2 text-gray-500">
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="text-sm">Searching...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (duplicates.length === 0) return null;
+
+  return (
+    <div className="absolute top-full left-0 right-0 z-[99999] mt-1 bg-white border-2 border-yellow-300 rounded-lg shadow-2xl max-h-60 overflow-y-auto min-w-[300px]" 
+         style={{ boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' }}>
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-gray-100 bg-yellow-50 rounded-t-lg">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm font-medium text-gray-700">
+            Similar Names ({duplicates.length})
+          </span>
+        </div>
+      </div>
+
+      {/* Duplicate entries */}
+      <div className="py-1">
+        {duplicates.map((dup, idx) => (
+          <button
+            key={idx}
+            onClick={() => onSelectName(dup.student.student_name || '')}
+            className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors border-b border-gray-100 last:border-b-0"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-mono text-xs">
+                  {dup.student.code}
+                </span>
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">
+                    {dup.student.student_name || 'No Name'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {dup.student.mobile_number || 'No Mobile'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  dup.matchType === 'exact' ? 'bg-red-100 text-red-800' :
+                  dup.matchType === 'high' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {dup.score}%
+                </span>
+                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Reasons */}
+            {dup.reasons.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {dup.reasons.map((reason, ridx) => (
+                  <span key={ridx} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Footer hint */}
+      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 rounded-b-lg">
+        <p className="text-xs text-gray-500">
+          Click to select existing name
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Duplicate Warning Section Component
+function DuplicateWarningSection({ duplicates }: { duplicates: DuplicateStudent[] }) {
+  const exactMatches = duplicates.filter(d => d.matchType === 'exact');
+  const highMatches = duplicates.filter(d => d.matchType === 'high');
+  const mediumMatches = duplicates.filter(d => d.matchType === 'medium');
+
+  return (
+    <div className="space-y-4">
+      {exactMatches.length > 0 && (
+        <div className="bg-red-50/90 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-red-800">Exact Duplicate Found!</h3>
+              <p className="text-sm text-red-700">These students match exactly with your input</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {exactMatches.map((dup, idx) => (
+              <DuplicateStudentCard key={idx} duplicate={dup} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {highMatches.length > 0 && (
+        <div className="bg-yellow-50/90 border border-yellow-200 rounded-xl p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-yellow-800">Similar Students Found</h3>
+              <p className="text-sm text-yellow-700">These students have high similarity to your input</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {highMatches.map((dup, idx) => (
+              <DuplicateStudentCard key={idx} duplicate={dup} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mediumMatches.length > 0 && (
+        <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-blue-800">Possible Matches</h3>
+              <p className="text-sm text-blue-700">These students might be related to your input</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {mediumMatches.map((dup, idx) => (
+              <DuplicateStudentCard key={idx} duplicate={dup} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Individual Duplicate Student Card
+function DuplicateStudentCard({ duplicate }: { duplicate: DuplicateStudent }) {
+  const { student, score, reasons, matchType } = duplicate;
+  
+  const matchTypeColors = {
+    exact: 'bg-red-100 text-red-800',
+    high: 'bg-yellow-100 text-yellow-800',
+    medium: 'bg-blue-100 text-blue-800'
+  };
+
+  return (
+    <div className="bg-white/70 border border-gray-200 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded font-mono text-sm">
+            {student.code}
+          </span>
+          <div>
+            <p className="font-medium text-gray-900">{student.student_name || 'No Name'}</p>
+            <p className="text-sm text-gray-600">{student.mobile_number || 'No Mobile'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 rounded text-xs font-medium ${matchTypeColors[matchType]}`}>
+            {score}% Match
+          </span>
+        </div>
+      </div>
+      
+      {reasons.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {reasons.map((reason, idx) => (
+            <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs">
+              {reason}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {student.national_id && (
+        <p className="text-xs text-gray-500">
+          National ID: {student.national_id}
+        </p>
+      )}
     </div>
   );
 }

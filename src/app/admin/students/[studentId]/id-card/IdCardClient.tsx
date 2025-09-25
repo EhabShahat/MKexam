@@ -9,6 +9,7 @@ interface StudentSummary {
   student_id: string;
   code: string;
   student_name: string | null;
+  mobile_number: string | null;
 }
 
 export default function StudentIdCardClient({ studentId }: { studentId: string }) {
@@ -36,6 +37,7 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
   });
 
   const brandLogoUrl = (publicSettings?.brand_logo_url as string) || null;
+  const brandName = (publicSettings?.brand_name as string) || "";
   const fullName = student?.student_name || "";
   const code = student?.code || "";
 
@@ -44,9 +46,9 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
   const [ready, setReady] = useState(false);
 
   const card = {
-    width: 720,
-    height: 960,
-    padding: 40,
+    width: 450,
+    height: 600,
+    padding: 24,
     bg: [
       { color: "#0b2844", y: 0 },
       { color: "#1b2b5a", y: 0.5 },
@@ -84,11 +86,44 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
       }
       ctx.globalAlpha = 1;
 
+      // Calculate vertical centering
+      const totalContentHeight = 
+        40 + // Arabic text height
+        (brandName ? 30 : 0) + // Brand name height (if present)
+        60   + // Gap after header text
+        340 + 20 + // QR container height
+        20 + // Gap after QR
+        32 + // Name text height
+        10 + // Gap between name and code
+        24; // Code text height
+      
+      const startY = (card.height - totalContentHeight) / 2;
+      let currentY = startY;
+
+      // Header text above QR code
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      
+      // Arabic cathedral text
+      ctx.font = "600 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan'";
+      ctx.fillText("كاتدرائية مارمينا والبابا كيرلس", card.width / 2, currentY + 30);
+      currentY += 40;
+      
+      // Brand name (if available)
+      if (brandName) {
+        ctx.font = "500 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+        ctx.fillText(brandName, card.width / 2, currentY + 20);
+        currentY += 30;
+      }
+
+      // Gap after header text
+      currentY += 100;
+
       // QR content
       const qrText = code || "";
 
       // Offscreen QR canvas
-      const qrSize = 420;
+      const qrSize = 340;
       const off = document.createElement("canvas");
       off.width = qrSize;
       off.height = qrSize;
@@ -99,13 +134,13 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
         color: { dark: "#0b0b0b", light: "#ffffff" },
       });
 
-      // White rounded rectangle container for QR
+      // Rounded rectangle container (transparent fill per latest design)
       const qrContainerW = qrSize + 20;
       const qrContainerH = qrSize + 20;
       const qrContainerX = (card.width - qrContainerW) / 2;
-      const qrContainerY = 240;
+      const qrContainerY = currentY;
       roundRect(ctx, qrContainerX, qrContainerY, qrContainerW, qrContainerH, 28);
-      ctx.fillStyle = "rgba(255,255,255,0)";
+      ctx.fillStyle = "#ffffff";
       ctx.fill();
 
       // Draw QR centered inside container
@@ -139,16 +174,20 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
         } catch {}
       }
 
+      // Update currentY after QR container
+      currentY += qrContainerH + 20; // Gap after QR
+
       // Name text
       ctx.fillStyle = "#ffffff";
-      ctx.font = "700 40px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.font = "700 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       ctx.textAlign = "center";
-      ctx.fillText(fullName || " ", card.width / 2, qrContainerY + qrContainerH + 80);
+      ctx.fillText(fullName || " ", card.width / 2, currentY + 25);
+      currentY += 42; // Name height + gap
 
-      // Code text (ID number)
-      ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
+      // Code text
+      ctx.font = "600 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
       ctx.fillStyle = "#d6e1ff";
-      ctx.fillText(code || " ", card.width / 2, qrContainerY + qrContainerH + 140);
+      ctx.fillText(code || " ", card.width / 2, currentY + 18);
 
       setReady(true);
     }
@@ -156,7 +195,7 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
     return () => {
       disposed = true;
     };
-  }, [student, brandLogoUrl, card.width, card.height, fullName, code]);
+  }, [student, brandLogoUrl, brandName, card.width, card.height, fullName, code]);
 
   const download = () => {
     if (!cardRef.current) return;
@@ -167,20 +206,27 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
     a.click();
   };
 
-  const printCard = () => {
-    if (!cardRef.current) return;
-    const dataUrl = cardRef.current.toDataURL("image/png");
-    const w = window.open("");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>ID Card</title><style>
-      html,body{margin:0;padding:0}
-      .wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111}
-      img{max-width:100%;height:auto;}
-      @media print { .noprint{display:none} }
-    </style></head><body><div class="wrap"><img src="${dataUrl}"/></div></body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
+  const sendId = () => {
+    if (!cardRef.current || !student) return;
+    
+    // Download the ID card image
+    const url = cardRef.current.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(fullName || "student").replace(/\s+/g, "_")}_${code || "id"}.png`;
+    a.click();
+    
+    // Open WhatsApp if mobile number is available
+    if (student.mobile_number) {
+      const cleanNumber = student.mobile_number.replace(/\D/g, '');
+      const mobileNumber = cleanNumber.startsWith('0') 
+        ? cleanNumber.substring(1) 
+        : cleanNumber;
+      
+      const message = `اغابي ${fullName || ''}! دا الكرت بتاعك اللي هتحضر به، خليه ديما معاك: ${code}`;
+      const whatsappUrl = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
   };
 
   return (
@@ -189,12 +235,29 @@ export default function StudentIdCardClient({ studentId }: { studentId: string }
         <h1 className="text-lg font-semibold">Student ID Card</h1>
         <div className="flex gap-2">
           <button className="btn" onClick={download} disabled={!ready}>Download PNG</button>
-          <button className="btn btn-primary" onClick={printCard} disabled={!ready}>Print</button>
+          <button className="btn btn-primary" onClick={sendId} disabled={!ready || !student?.mobile_number}>
+            Send ID
+          </button>
         </div>
       </div>
 
       <div className="flex items-center justify-center">
-        <canvas ref={cardRef} className="rounded-xl shadow-2xl border border-gray-200"/>
+        <canvas
+          ref={cardRef}
+          width={card.width}
+          height={card.height}
+          style={{
+            width: card.width,
+            height: card.height,
+            minWidth: card.width,
+            minHeight: card.height,
+            maxWidth: card.width,
+            maxHeight: card.height,
+            display: "block",
+            flex: "0 0 auto",
+          }}
+          className="rounded-xl shadow-2xl border border-gray-200 shrink-0 grow-0 basis-auto"
+        />
       </div>
       <p className="text-sm text-gray-500 mt-4 text-center">QR contains the student's code. Logo is embedded at the center.</p>
     </div>

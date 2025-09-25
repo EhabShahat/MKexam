@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 10; // Limit to 10 seconds to prevent long-running functions
 
 // Catch-all dispatcher for public API endpoints
 export async function GET(request: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
@@ -61,6 +62,15 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ path?: 
           const examId = sub;
           const mod = await import("@/server/public/examInfo");
           return mod.examInfoGET(examId);
+        }
+        return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+      case "students": {
+        const [sub] = rest;
+        // /api/public/students/by-national
+        if (sub === "by-national") {
+          const mod = await import("@/server/public/studentsByNational");
+          return mod.studentsByNationalGET(request as any);
         }
         return NextResponse.json({ error: "not_found" }, { status: 404 });
       }
