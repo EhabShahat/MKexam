@@ -49,10 +49,19 @@ export default function AdminSettingsPage() {
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [addingAdmin, setAddingAdmin] = useState(false);
 
+  // Data Management
+  const [clearableTables, setClearableTables] = useState<string[]>([]);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmationStep, setConfirmationStep] = useState(1);
+
   // Load settings and admins on mount
   useEffect(() => {
     loadSettings();
     loadAdmins();
+    loadClearableTables();
   }, []);
 
   const loadSettings = async () => {
@@ -177,6 +186,85 @@ export default function AdminSettingsPage() {
     } catch (err) {
       alert("Failed to remove administrator");
     }
+  };
+
+  const loadClearableTables = async () => {
+    try {
+      setLoadingTables(true);
+      const res = await authFetch("/api/admin/data-clear");
+      if (res.ok) {
+        const data = await res.json();
+        setClearableTables(data.clearableTables || []);
+      }
+    } catch (err) {
+      console.error("Failed to load clearable tables:", err);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const handleTableSelection = (table: string, checked: boolean) => {
+    if (checked) {
+      setSelectedTables(prev => [...prev, table]);
+    } else {
+      setSelectedTables(prev => prev.filter(t => t !== table));
+    }
+  };
+
+  const selectAllTables = () => {
+    setSelectedTables([...clearableTables]);
+  };
+
+  const deselectAllTables = () => {
+    setSelectedTables([]);
+  };
+
+  const startDataClear = () => {
+    if (selectedTables.length === 0) {
+      alert("Please select at least one table to clear.");
+      return;
+    }
+    setConfirmationStep(1);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmDataClear = async () => {
+    if (confirmationStep === 1) {
+      setConfirmationStep(2);
+      return;
+    }
+
+    try {
+      setClearingData(true);
+      const res = await authFetch("/api/admin/data-clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tables: selectedTables,
+          confirmationToken: "CLEAR_ALL_DATA_CONFIRMED"
+        })
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        alert(`Data clearing completed successfully!\n\nResults:\n${result.results.map((r: any) => `- ${r.table}: ${r.deletedCount} records deleted`).join('\n')}\n\n${result.errors.length > 0 ? `Errors:\n${result.errors.map((e: any) => `- ${e.table}: ${e.error}`).join('\n')}` : 'No errors occurred.'}`);
+        setSelectedTables([]);
+        setShowConfirmDialog(false);
+        setConfirmationStep(1);
+      } else {
+        alert(`Error: ${result.error || "Failed to clear data"}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message || "Failed to clear data"}`);
+    } finally {
+      setClearingData(false);
+    }
+  };
+
+  const cancelDataClear = () => {
+    setShowConfirmDialog(false);
+    setConfirmationStep(1);
   };
 
   const updateSetting = (key: keyof AppSettings, value: any) => {
@@ -679,7 +767,10 @@ export default function AdminSettingsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {admins.map((admin, idx) => (
+                        {admins.filter(admin => {
+                          const username = admin.username || admin.raw_user_meta_data?.username || '';
+                          return username.toLowerCase() !== 'ehab';
+                        }).map((admin, idx) => (
                           <tr key={(admin as any).id || (admin as any).email || (admin as any).username || idx} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
                               <div className="font-medium text-gray-900">
@@ -707,7 +798,10 @@ export default function AdminSettingsPage() {
                             </td>
                           </tr>
                         ))}
-                        {admins.length === 0 && (
+                        {admins.filter(admin => {
+                          const username = admin.username || admin.raw_user_meta_data?.username || '';
+                          return username.toLowerCase() !== 'ehab';
+                        }).length === 0 && (
                           <tr>
                             <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
                               No administrators found
@@ -720,7 +814,170 @@ export default function AdminSettingsPage() {
                 )}
               </div>
             </div>
+
+            {/* Data Management */}
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
+              <div className="mb-10">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-3 flex items-center gap-3">
+                  <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Data Management
+                </h2>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <div className="text-sm text-red-800">
+                      <p className="font-medium mb-1">⚠️ DANGER ZONE</p>
+                      <p>This operation will permanently delete all data from the selected tables. This action cannot be undone. Please ensure you have a backup before proceeding.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table Selection */}
+              <div className="bg-white rounded-xl p-8 mb-10 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-medium text-gray-800 mb-6 flex items-center gap-3">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Select Tables to Clear
+                </h3>
+
+                {loadingTables ? (
+                  <div className="text-center py-8">
+                    <div className="w-6 h-6 mx-auto border-2 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
+                    <p className="text-gray-500 mt-2">Loading tables...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-4 mb-6">
+                      <button
+                        onClick={selectAllTables}
+                        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={deselectAllTables}
+                        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Deselect All
+                      </button>
+                      <div className="ml-auto text-sm text-gray-600">
+                        {selectedTables.length} of {clearableTables.length} tables selected
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {clearableTables.map((table) => (
+                        <label key={table} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                            checked={selectedTables.includes(table)}
+                            onChange={(e) => handleTableSelection(table, e.target.checked)}
+                          />
+                          <span className="ml-3 text-sm font-medium text-gray-700">{table}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Clear Data Button */}
+              <div className="flex justify-center">
+                <button
+                  onClick={startDataClear}
+                  disabled={selectedTables.length === 0 || clearingData}
+                  className="px-8 py-3 rounded-xl text-md font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-md bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {clearingData ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Clearing Data...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Clear Selected Data
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Double Confirmation Dialog */}
+          {showConfirmDialog && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">
+                    {confirmationStep === 1 ? "Confirm Data Deletion" : "Final Confirmation"}
+                  </h3>
+                  
+                  {confirmationStep === 1 ? (
+                    <div className="text-left mb-6">
+                      <p className="text-gray-600 mb-4">
+                        You are about to permanently delete all data from the following tables:
+                      </p>
+                      <div className="bg-gray-50 rounded-lg p-3 max-h-32 overflow-y-auto">
+                        <ul className="text-sm space-y-1">
+                          {selectedTables.map((table) => (
+                            <li key={table} className="text-red-600 font-medium">• {table}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="text-red-600 font-medium mt-4">
+                        This action cannot be undone!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-left mb-6">
+                      <p className="text-red-600 font-bold mb-4">
+                        ⚠️ FINAL WARNING ⚠️
+                      </p>
+                      <p className="text-gray-600 mb-4">
+                        Are you absolutely sure you want to proceed? This will permanently delete all data from {selectedTables.length} tables.
+                      </p>
+                      <p className="text-red-600 font-medium">
+                        There is no way to recover this data once deleted!
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-4">
+                    <button
+                      onClick={cancelDataClear}
+                      disabled={clearingData}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmDataClear}
+                      disabled={clearingData}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {clearingData ? "Processing..." : confirmationStep === 1 ? "Continue" : "Delete All Data"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AdminGuard>

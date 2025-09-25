@@ -97,6 +97,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         const mod = await import("@/server/admin/system");
         return mod.systemGET(req);
       }
+      case "data-clear": {
+        const mod = await import("@/server/admin/dataClear");
+        return mod.dataClearGET(req);
+      }
       case "summaries": {
         const mod = await import("@/server/admin/summaries");
         return mod.adminSummariesGET(req);
@@ -152,6 +156,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
       case "system": {
         const mod = await import("@/server/admin/system");
         return mod.systemPOST(req);
+      }
+      case "data-clear": {
+        const mod = await import("@/server/admin/dataClear");
+        return mod.dataClearPOST(req);
       }
       case "blocked-entries": {
         const mod = await import("@/server/admin/blockedEntries");

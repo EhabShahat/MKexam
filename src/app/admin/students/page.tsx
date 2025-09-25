@@ -305,25 +305,6 @@ export default function GlobalStudentsPage() {
     },
   });
 
-  // Clear all students
-  const clearAll = useMutation({
-    mutationFn: async () => {
-      setActionError(null);
-      const res = await authFetch("/api/admin/students/clear", { method: "POST" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || "Clear failed");
-      return j;
-    },
-    onSuccess: (result) => {
-      setActionError(null);
-      qc.invalidateQueries({ queryKey: ["admin", "students", "global"] });
-      alert(`Cleared ${result.deleted_count} students. Historical exam data preserved.`);
-    },
-    onError: (error: any) => {
-      setActionError(error?.message || "Failed to clear students");
-    },
-  });
-
   // Import
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [preview, setPreview] = useState<any[]>([]);
@@ -508,7 +489,7 @@ export default function GlobalStudentsPage() {
             <h2 className="text-lg font-semibold text-gray-800">Search & Import</h2>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Search */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Search Students</label>
@@ -546,31 +527,7 @@ export default function GlobalStudentsPage() {
               <p className="text-xs text-gray-500 mt-1">CSV/XLSX</p>
             </div>
             
-            {/* Actions */}
-            <div className="flex flex-col gap-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Actions</label>
-              <div className="flex gap-2">
-                {preview.length > 0 && (
-                  <button 
-                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-                    onClick={commitImport}
-                  >
-                    Import {preview.length}
-                  </button>
-                )}
-                <button 
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-                  onClick={() => {
-                    if (confirm("Clear ALL students? This will preserve historical exam data but remove all current students.")) {
-                      clearAll.mutate();
-                    }
-                  }}
-                  disabled={clearAll.isPending}
-                >
-                  {clearAll.isPending ? "Clearing..." : "Clear All"}
-                </button>
-              </div>
-            </div>
+            
           </div>
           
           {importErrors.length > 0 && (
