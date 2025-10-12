@@ -800,7 +800,7 @@ export default function AdminSettingsPage() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <button
-                                onClick={() => removeAdmin(admin.user_id || admin.id)}
+                                onClick={() => removeAdmin(admin.user_id || admin.id || '')}
                                 className="text-red-600 hover:text-red-800 p-2 rounded transition-colors"
                                 title="Remove administrator"
                               >
