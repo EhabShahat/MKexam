@@ -1,10 +1,16 @@
-# Fix: Admin Management Permissions Issue
+# Fix: Admin Management Permissions Issues
 
-## Problem
-The "Add New Admin" functionality in the admin settings page was not working. Admins had to manually execute SQL commands directly in the Supabase SQL editor to create new admin accounts.
+## Problems
+1. **Permission Error**: The "Add New Admin" functionality was not working - functions weren't accessible
+2. **Ambiguous Column Error**: Getting error "column reference 'user_id' is ambiguous" when creating admins
 
-## Root Cause
+## Root Causes
+
+### Issue 1: Missing Permission Grants
 The database RPC functions for admin management were missing proper permission grants. The functions were only granted to `service_role`, but they needed to be accessible to `authenticated` users (logged-in admins).
+
+### Issue 2: Ambiguous Column Reference
+When Row Level Security (RLS) is enabled on the `admin_users` table, using `ON CONFLICT ... DO UPDATE` creates an ambiguous reference to `user_id` because both the target table and the `EXCLUDED` pseudo-table are in scope.
 
 ### Affected Functions:
 1. `admin_list_admins()` - List all administrators
@@ -15,9 +21,9 @@ The database RPC functions for admin management were missing proper permission g
 6. `admin_set_user_password()` - Reset admin password
 7. `auth_login()` - Login function
 
-## Solution
+## Solutions
 
-### Changed Grants in `db/rpc_functions.sql`
+### Solution 1: Fixed Permission Grants in `db/rpc_functions.sql`
 
 **Before:**
 ```sql
@@ -33,6 +39,25 @@ grant execute on function public.admin_create_user(...) to anon, authenticated, 
 grant execute on function public.auth_login(...) to anon, authenticated, service_role;
 ```
 
+### Solution 2: Fixed Ambiguous Column References
+
+**Problem Code** (Lines 1004-1006):
+```sql
+INSERT INTO public.admin_users (user_id, email)
+VALUES (v_uid, v_email)
+ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email;
+```
+
+**Fixed Code**:
+```sql
+INSERT INTO public.admin_users (user_id, email)
+VALUES (v_uid, v_email)
+ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email
+WHERE admin_users.user_id = EXCLUDED.user_id;
+```
+
+**Explanation**: The `WHERE` clause explicitly qualifies which `user_id` we're referring to, eliminating the ambiguity caused by RLS policies.
+
 ### Security
 These functions are still secure because:
 1. Each function has `is_admin()` checks inside to verify the caller is an admin
@@ -40,12 +65,14 @@ These functions are still secure because:
 3. The `is_admin()` function verifies the user exists in the `admin_users` table
 
 ## Files Modified
-- `db/rpc_functions.sql` - Updated grants for 7 admin-related functions
+- `db/rpc_functions.sql` - Updated grants + fixed ambiguous column references
+- `db/fix_admin_grants.sql` - Updated with both fixes
 
 ## Deployment Steps
 1. **Run the updated SQL** in your Supabase SQL Editor:
-   - Copy the modified `rpc_functions.sql` 
-   - Or run just the grant statements:
+   - **Easiest**: Copy and run the entire `db/fix_admin_grants.sql` file
+   - **Or** copy the modified `db/rpc_functions.sql` 
+   - **Or** run just the fixes manually:
 
 ```sql
 -- Admin management grants
@@ -71,13 +98,16 @@ After deploying, verify:
 4. ✅ Login still works for all admins
 
 ## What This Fixes
-✅ Admin creation form now works from the UI  
-✅ No more need to manually run SQL commands  
-✅ Admin management is accessible to logged-in admins  
-✅ Secure - all functions still verify admin privileges  
+✅ **Permission errors** - Admin creation form now works from UI  
+✅ **Ambiguous column error** - Fixed "column reference 'user_id' is ambiguous"  
+✅ Can list all administrators  
+✅ Can create new administrators  
+✅ Can remove administrators  
+✅ No more manual SQL commands needed  
+✅ Secure - functions still verify admin privileges internally  
+✅ Compatible with RLS (Row Level Security) policies 
 
 ## Notes
 - The functions were already secure with `is_admin()` checks
 - We only made them **callable** by authenticated users
 - The functions will still reject non-admin users
-- This is the proper pattern for admin-only RPC functions

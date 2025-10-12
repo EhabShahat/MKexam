@@ -29,7 +29,8 @@ type AppSettings = {
 };
 
 type Admin = {
-  id: string;
+  id?: string; // Legacy support
+  user_id?: string; // From database
   email: string;
   created_at: string;
   username?: string;
@@ -799,7 +800,7 @@ export default function AdminSettingsPage() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <button
-                                onClick={() => removeAdmin(admin.id)}
+                                onClick={() => removeAdmin(admin.user_id || admin.id)}
                                 className="text-red-600 hover:text-red-800 p-2 rounded transition-colors"
                                 title="Remove administrator"
                               >

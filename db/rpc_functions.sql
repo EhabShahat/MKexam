@@ -851,9 +851,15 @@ BEGIN
     RAISE EXCEPTION 'user_create_failed';
   END IF;
 
-  INSERT INTO public.admin_users (user_id, email)
-  VALUES (v_uid, v_email)
-  ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email;
+  -- Explicitly check if admin exists to avoid ambiguous column reference with RLS
+  IF EXISTS(SELECT 1 FROM public.admin_users WHERE admin_users.user_id = v_uid) THEN
+    UPDATE public.admin_users 
+    SET email = v_email 
+    WHERE admin_users.user_id = v_uid;
+  ELSE
+    INSERT INTO public.admin_users (user_id, email)
+    VALUES (v_uid, v_email);
+  END IF;
 
   RETURN QUERY SELECT v_uid, v_email;
 END;
@@ -1001,9 +1007,15 @@ BEGIN
   RETURNING id INTO v_uid;
 
   IF p_is_admin THEN
-    INSERT INTO public.admin_users (user_id, email)
-    VALUES (v_uid, v_email)
-    ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email;
+    -- Explicitly check if admin exists to avoid ambiguous column reference with RLS
+    IF EXISTS(SELECT 1 FROM public.admin_users WHERE admin_users.user_id = v_uid) THEN
+      UPDATE public.admin_users 
+      SET email = v_email 
+      WHERE admin_users.user_id = v_uid;
+    ELSE
+      INSERT INTO public.admin_users (user_id, email)
+      VALUES (v_uid, v_email);
+    END IF;
   END IF;
 
   RETURN QUERY SELECT v_uid, v_username, v_email, p_is_admin;
