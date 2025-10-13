@@ -7,14 +7,18 @@ export default function Timer({
   durationMinutes,
   examEndsAt,
   onExpire,
-  disabled = false
+  disabled = false,
+  serverOffsetMs,
+  onWarning,
 }: TimerProps) {
   const { remainingMs } = useTimer({
     startedAt,
     durationMinutes,
     examEndsAt,
     onExpire,
-    disabled
+    disabled,
+    serverOffsetMs,
+    onWarning,
   });
 
   // If there's no deadline or timer is disabled, don't render anything

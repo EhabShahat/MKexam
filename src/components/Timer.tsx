@@ -9,6 +9,7 @@ export default function Timer({
   onExpire,
   onWarning,
   disabled,
+  serverOffsetMs,
 }: {
   startedAt: string;
   durationMinutes: number | null;
@@ -16,8 +17,11 @@ export default function Timer({
   onExpire: () => void;
   onWarning?: (minutesLeft: number) => void;
   disabled?: boolean;
+  serverOffsetMs?: number; // difference = server_now - Date.now()
 }) {
-  const [now, setNow] = useState<number>(Date.now());
+  // Helper to get a clock aligned with server time (if provided)
+  const getNow = () => Date.now() + (serverOffsetMs || 0);
+  const [now, setNow] = useState<number>(getNow());
   const firedRef = useRef(false);
   const warningsFiredRef = useRef<Set<number>>(new Set());
 
@@ -107,7 +111,7 @@ export default function Timer({
         const durationDeadline = startTime + durationMinutes * 60_000;
         
         // Enhanced Validation 8: Check deadline is not too far in future (max 25 hours from now)
-        const MAX_FUTURE = now + (25 * 60 * 60 * 1000);
+        const MAX_FUTURE = (Date.now() + (serverOffsetMs || 0)) + (25 * 60 * 60 * 1000);
         if (durationDeadline > MAX_FUTURE) {
           console.error("Timer: Duration deadline is too far in the future", {
             deadline: new Date(durationDeadline).toISOString(),
@@ -117,14 +121,14 @@ export default function Timer({
         }
         
         // Sanity check: deadline should be in the future
-        if (durationDeadline > now) {
+        if (durationDeadline > (Date.now() + (serverOffsetMs || 0))) {
           deadlines.push(durationDeadline);
           console.log("Timer: Duration deadline set to", new Date(durationDeadline).toISOString(), 
             `(${durationMinutes} minutes)`);
         } else {
           console.warn("Timer: Duration deadline is in the past, might be expired", {
             deadline: new Date(durationDeadline).toISOString(),
-            now: new Date(now).toISOString()
+            now: new Date(Date.now() + (serverOffsetMs || 0)).toISOString()
           });
           // Still add it but log the warning
           deadlines.push(durationDeadline);
@@ -186,12 +190,12 @@ export default function Timer({
     const finalDeadline = Math.min(...deadlines);
     console.log("Timer: Final deadline calculated", new Date(finalDeadline).toISOString());
     return finalDeadline;
-  }, [startedAt, durationMinutes, examEndsAt]);
+  }, [startedAt, durationMinutes, examEndsAt, serverOffsetMs]);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(getNow()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [serverOffsetMs]);
 
   const remainingMs = deadline ? Math.max(0, deadline - now) : null;
 
@@ -203,7 +207,7 @@ export default function Timer({
     // CRITICAL SAFETY CHECKS to prevent premature auto-submission
     try {
       const startTime = new Date(startedAt).getTime();
-      const currentTime = Date.now();
+      const currentTime = getNow();
       
       // Safety check 1: Validate start time is sane
       if (isNaN(startTime) || startTime < 0) {

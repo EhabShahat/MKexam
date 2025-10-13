@@ -15,7 +15,10 @@ export async function GET(
       p_attempt_id: attemptId,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...(data as any),
+      server_now: new Date().toISOString(),
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
   }

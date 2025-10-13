@@ -4,6 +4,8 @@ export interface TimerProps {
   examEndsAt: string | null;
   onExpire: () => void;
   disabled?: boolean;
+  serverOffsetMs?: number;
+  onWarning?: (minutesLeft: number) => void;
 }
 
 export interface UseTimerProps {
@@ -12,6 +14,8 @@ export interface UseTimerProps {
   examEndsAt: string | null;
   onExpire: () => void;
   disabled?: boolean;
+  serverOffsetMs?: number;
+  onWarning?: (minutesLeft: number) => void;
 }
 
 export interface UseTimerResult {

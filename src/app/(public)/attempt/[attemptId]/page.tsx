@@ -78,6 +78,7 @@ export default function AttemptPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [serverOffsetMs, setServerOffsetMs] = useState<number | undefined>(undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(200); // Dynamic header height
   const { locale, dir } = useStudentLocale();
@@ -133,26 +134,37 @@ export default function AttemptPage() {
     return qs;
   }, [state, randomize, attemptId]);
 
-  // Removed redundant /info fetch to reduce function invocations. The /state call below loads
-  // the full attempt including exam and questions; we also move the exam_started activity there.
+  // Load attempt state from the API (not direct RPC) to get server_now for clock alignment.
+  // This prevents premature auto-submit caused by client device clock drift.
 
   useEffect(() => {
     if (!attemptId) return;
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabaseClient.rpc("get_attempt_state", { p_attempt_id: attemptId });
-        if (error) throw new Error(error.message || "Failed to load state");
+        const res = await fetch(`/api/attempts/${attemptId}/state`, { cache: 'no-store' });
+        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load state');
+        const payload = await res.json();
         if (cancelled) return;
-        setState(data as unknown as AttemptState);
-        setAnswers(((data as any)?.answers as any) || {});
-        setVersion(((data as any)?.version as number) || 1);
+
+        // Compute server offset for timer alignment
+        try {
+          if (payload?.server_now) {
+            const serverNow = new Date(payload.server_now).getTime();
+            const deviceNow = Date.now();
+            setServerOffsetMs(serverNow - deviceNow);
+          }
+        } catch {}
+
+        setState(payload as unknown as AttemptState);
+        setAnswers(((payload as any)?.answers as any) || {});
+        setVersion(((payload as any)?.version as number) || 1);
         // Log exam start activity once after state is loaded
         try {
           logActivity('exam_started', {
-            examId: (data as any)?.exam?.id,
-            examTitle: (data as any)?.exam?.title,
-            questionCount: ((data as any)?.questions?.length as number) || 0,
+            examId: (payload as any)?.exam?.id,
+            examTitle: (payload as any)?.exam?.title,
+            questionCount: ((payload as any)?.questions?.length as number) || 0,
           });
         } catch {}
         // Try recovery from localStorage
@@ -166,7 +178,7 @@ export default function AttemptPage() {
           }
         } catch {}
       } catch (e: any) {
-        setError(e?.message || "Unexpected error");
+        setError(e?.message || 'Unexpected error');
       } finally {
         setLoading(false);
       }
@@ -291,7 +303,7 @@ export default function AttemptPage() {
         return;
       }
       
-      const currentTime = Date.now();
+      const currentTime = Date.now() + (serverOffsetMs || 0);
       const timeElapsed = currentTime - startTime;
       const MIN_RUNTIME_MS = 30000; // 30 seconds minimum for manual submission
       
@@ -766,6 +778,7 @@ export default function AttemptPage() {
             onExpire={onSubmit} 
             onWarning={handleTimeWarning}
             disabled={disabled}
+            serverOffsetMs={serverOffsetMs}
           />
 
           {/* Save Status */}
