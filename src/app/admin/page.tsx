@@ -316,9 +316,9 @@ export default function AdminHomePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 w-full">
             {/* Exams button visibility toggle */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-800">Exams</span>
               <button
                 type="button"
@@ -339,7 +339,7 @@ export default function AdminHomePage() {
             </div>
 
             {/* Results button visibility toggle */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-800">Results</span>
               <button
                 type="button"
@@ -360,7 +360,7 @@ export default function AdminHomePage() {
             </div>
 
             {/* Registration button visibility toggle */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
               <span className="text-sm font-medium text-gray-800">Register</span>
               <button
                 type="button"

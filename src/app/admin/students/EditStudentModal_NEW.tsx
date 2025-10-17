@@ -1,3 +1,21 @@
+"use client";
+import React, { useEffect, useState } from "react";
+
+type Student = {
+  student_id: string;
+  code: string;
+  student_name: string | null;
+  mobile_number: string | null;
+  mobile_number2?: string | null;
+  address?: string | null;
+  national_id?: string | null;
+  photo_url?: string | null;
+  national_id_photo_url?: string | null;
+  total_exams_attempted?: number;
+  completed_exams?: number;
+  in_progress_exams?: number;
+};
+
 // This is the new sidebar split layout for EditStudentModal
 // Copy this to replace the existing EditStudentModal in page.tsx (lines 1259-1630)
 
@@ -402,3 +420,4 @@ function EditStudentModal({
     </div>
   );
 }
+export default EditStudentModal;
