@@ -13,8 +13,7 @@ export async function examsGET(req: NextRequest) {
     let query = svc
       .from("exams")
       .select("*" as const)
-      .in("status", ["published", "done"]) // limit to published and done
-      .order("start_time", { ascending: true, nullsFirst: true });
+      .order("created_at", { ascending: false }); // Show all exams, newest first
     if (q) query = query.ilike("title", `%${q}%`);
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -43,9 +42,24 @@ export async function examsPOST(req: NextRequest) {
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
 
+    // Determine scheduling mode: Auto if both times set, Manual otherwise
+    const scheduling_mode = (start_time && end_time) ? 'Auto' : 'Manual';
+
     const { data, error } = await svc
       .from("exams")
-      .insert({ title, description, start_time, end_time, duration_minutes, status, access_type, settings })
+      .insert({ 
+        title, 
+        description, 
+        start_time, 
+        end_time, 
+        duration_minutes, 
+        status, 
+        access_type, 
+        settings,
+        scheduling_mode,
+        is_manually_published: false,
+        is_archived: false
+      })
       .select("*")
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

@@ -32,6 +32,8 @@ interface QuestionRow {
   // Image support
   question_image_url?: string | null;
   option_image_urls?: (string | null)[] | null;
+  // Auto-grading for paragraph/photo_upload
+  auto_grade_on_answer?: boolean;
 }
 
 interface QuestionsSectionProps {
@@ -579,6 +581,7 @@ function QuestionModal({
     points: question?.points || 1,
     question_image_url: question?.question_image_url || null,
     option_image_urls: question?.option_image_urls || [],
+    auto_grade_on_answer: question?.auto_grade_on_answer ?? false,
   });
   
   // Image upload states
@@ -704,8 +707,8 @@ function QuestionModal({
                 {formData.question_type === "multiple_choice" && "Students can select only one option, but multiple options can be marked as correct."}
                 {formData.question_type === "multi_select" && "Students can select multiple options using checkboxes."}
                 {formData.question_type === "true_false" && "Simple true or false question."}
-                {formData.question_type === "paragraph" && "Open-ended text response question (manually graded)."}
-                {formData.question_type === "photo_upload" && "Student will upload a single image as the answer (manually graded)."}
+                {formData.question_type === "paragraph" && "Open-ended text response question (can be auto-graded or manually graded)."}
+                {formData.question_type === "photo_upload" && "Student will upload a single image as the answer (can be auto-graded or manually graded)."}
               </div>
             </div>
 
@@ -930,6 +933,27 @@ function QuestionModal({
                     </label>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Auto-grading option for paragraph/photo_upload */}
+            {(formData.question_type === "paragraph" || formData.question_type === "photo_upload") && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={formData.auto_grade_on_answer ?? false}
+                    onChange={(e) => updateField('auto_grade_on_answer', e.target.checked)}
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">Auto-grade if answer provided</span>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Automatically award full points if the student provides any answer (text or photo).
+                      If disabled, manual grading will be required.
+                    </p>
+                  </div>
+                </label>
               </div>
             )}
 

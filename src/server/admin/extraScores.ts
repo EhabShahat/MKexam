@@ -196,7 +196,7 @@ export async function extraScoresExamsGET(req: NextRequest) {
       .from("exams")
       .select("id, title, status, exam_type")
       .eq("status", "done")
-      .eq("exam_type", "exam") // Only show actual "exam" type assessments
+      // Show all assessment types: exam, quiz, homework
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
     if (examsErr) throw examsErr;
@@ -714,31 +714,37 @@ export async function extraScoresSyncExamTagsPOST(req: NextRequest) {
         }
       }
       
-      // 2. Update students with tag scores
+      // 2. Update students with tag scores using extra_scores table
+      const studentUpdates: any[] = [];
       for (const studentScore of tagStats.students || []) {
-        // Get current extra_scores
-        const { data: currentStudent, error: fetchError } = await svc
-          .from("students")
-          .select("extra_scores")
-          .eq("id", studentScore.student_id)
-          .single();
+        // Get current extra_scores from extra_scores table
+        const { data: currentExtra, error: fetchError } = await svc
+          .from("extra_scores")
+          .select("data")
+          .eq("student_id", studentScore.student_id)
+          .maybeSingle();
           
-        if (fetchError) continue;
-        
-        const currentExtraScores = currentStudent.extra_scores || {};
-        const updatedExtraScores = {
-          ...currentExtraScores,
+        const currentData = currentExtra?.data || {};
+        const updatedData = {
+          ...currentData,
           [fieldKey]: studentScore.average_percentage
         };
         
-        // Update student with new tag score
+        studentUpdates.push({
+          student_id: studentScore.student_id,
+          data: updatedData,
+          updated_at: new Date().toISOString()
+        });
+      }
+      
+      // Batch update students
+      if (studentUpdates.length > 0) {
         const { error: updateError } = await svc
-          .from("students")
-          .update({ extra_scores: updatedExtraScores })
-          .eq("id", studentScore.student_id);
+          .from("extra_scores")
+          .upsert(studentUpdates, { onConflict: "student_id", ignoreDuplicates: false });
           
         if (!updateError) {
-          updatedStudents++;
+          updatedStudents += studentUpdates.length;
         }
       }
     }
@@ -825,33 +831,39 @@ export async function extraScoresSyncAttendancePOST(req: NextRequest) {
     
     let updatedCount = 0;
     
-    // 4. Update each student's extra_scores with attendance percentage
+    // 4. Update each student's extra_scores with attendance percentage using extra_scores table
+    const studentUpdates: any[] = [];
     for (const student of students || []) {
       const attendancePercentage = attendanceMap.get(student.id) || 0;
       
-      // Get current extra_scores
-      const { data: currentStudent, error: fetchError } = await svc
-        .from("students")
-        .select("extra_scores")
-        .eq("id", student.id)
-        .single();
+      // Get current extra_scores from extra_scores table
+      const { data: currentExtra, error: fetchError } = await svc
+        .from("extra_scores")
+        .select("data")
+        .eq("student_id", student.id)
+        .maybeSingle();
         
-      if (fetchError) continue;
-      
-      const currentExtraScores = currentStudent.extra_scores || {};
-      const updatedExtraScores = {
-        ...currentExtraScores,
+      const currentData = currentExtra?.data || {};
+      const updatedData = {
+        ...currentData,
         [fieldKey]: attendancePercentage
       };
       
-      // Update student with new attendance data
+      studentUpdates.push({
+        student_id: student.id,
+        data: updatedData,
+        updated_at: new Date().toISOString()
+      });
+    }
+    
+    // Batch update students
+    if (studentUpdates.length > 0) {
       const { error: updateError } = await svc
-        .from("students")
-        .update({ extra_scores: updatedExtraScores })
-        .eq("id", student.id);
+        .from("extra_scores")
+        .upsert(studentUpdates, { onConflict: "student_id", ignoreDuplicates: false });
         
       if (!updateError) {
-        updatedCount++;
+        updatedCount = studentUpdates.length;
       }
     }
     

@@ -80,8 +80,12 @@ export async function adminSummariesGET(req: NextRequest) {
       }
     }
 
-    // Exams done and include map
-    const { data: examsRes } = await svc.from("exams").select("id, settings").eq("status", "done");
+    // Exams done and include map (exclude quiz/homework to avoid double counting)
+    const { data: examsRes } = await svc
+      .from("exams")
+      .select("id, settings, exam_type")
+      .eq("status", "done")
+      .or("exam_type.is.null,exam_type.eq.exam"); // Only include actual "exam" type, not quiz/homework
     const exams = (examsRes || []) as any[];
     const examIds = exams.map((e) => e.id);
     const includeMap = new Map<string, boolean>();

@@ -15,7 +15,7 @@ export async function studentsByNationalGET(req: NextRequest) {
     const svc = supabaseServer();
     const { data, error } = await svc
       .from("students")
-      .select("id, code, student_name")
+      .select("id, code, student_name, photo_url")
       .eq("national_id", nationalId)
       .limit(1)
       .maybeSingle();
@@ -33,6 +33,7 @@ export async function studentsByNationalGET(req: NextRequest) {
       student_id: (data as any).id as string,
       code: (data as any).code as string,
       student_name: (data as any).student_name as string | null,
+      photo_url: (data as any).photo_url as string | null,
     };
 
     return NextResponse.json({ student }, { status: 200 });

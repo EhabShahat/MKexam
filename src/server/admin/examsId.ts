@@ -23,6 +23,15 @@ export async function examsIdPATCH(req: NextRequest, examId: string) {
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
 
+    // Auto-set archived_at when archiving
+    if (body.is_archived === true && !body.archived_at) {
+      body.archived_at = new Date().toISOString();
+    }
+    // Clear archived_at when unarchiving
+    if (body.is_archived === false) {
+      body.archived_at = null;
+    }
+
     const { data, error } = await svc
       .from("exams")
       .update(body)

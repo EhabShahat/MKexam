@@ -10,7 +10,8 @@ import ModernCard from "@/components/admin/ModernCard";
 import ModernTable from "@/components/admin/ModernTable";
 import SearchInput from "@/components/admin/SearchInput";
 import ActionButton from "@/components/admin/ActionButton";
-import StatusBadge from "@/components/admin/StatusBadge";
+import EnhancedStatusBadge from "@/components/admin/EnhancedStatusBadge";
+import { getExamStatus, filterExamsByCategory } from "@/lib/examStatus";
 
 interface Exam {
   id: string;
@@ -22,11 +23,15 @@ interface Exam {
   created_at: string;
   question_count?: number;
   attempt_count?: number;
+  scheduling_mode?: 'Auto' | 'Manual';
+  is_manually_published?: boolean;
+  is_archived?: boolean;
 }
 
 export default function AdminExamsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'upcoming' | 'ended' | 'archived'>('all');
   const toast = useToast();
   const queryClient = useQueryClient();
   
@@ -41,7 +46,14 @@ export default function AdminExamsPage() {
     },
   });
 
-  const exams = data?.items ?? [];
+  const allExams = data?.items ?? [];
+  const exams = filterExamsByCategory(allExams, statusFilter);
+  
+  // Count exams by category
+  const liveCount = filterExamsByCategory(allExams, 'live').length;
+  const upcomingCount = filterExamsByCategory(allExams, 'upcoming').length;
+  const endedCount = filterExamsByCategory(allExams, 'ended').length;
+  const archivedCount = filterExamsByCategory(allExams, 'archived').length;
 
   // Duplicate exam mutation
   const duplicateMutation = useMutation({
@@ -82,12 +94,97 @@ export default function AdminExamsPage() {
     },
   });
 
+  // Publish exam mutation (manual publish or early publish)
+  const publishMutation = useMutation({
+    mutationFn: async (examId: string) => {
+      const res = await authFetch(`/api/admin/exams/${examId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_manually_published: true }),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result?.error || "Publish failed");
+      }
+      return examId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "exams"] });
+      toast.success({ title: "Exam Published", message: "Exam is now accessible to students" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Publish Failed", message: error.message });
+    },
+  });
+
+  // Unpublish exam mutation
+  const unpublishMutation = useMutation({
+    mutationFn: async (examId: string) => {
+      const res = await authFetch(`/api/admin/exams/${examId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_manually_published: false }),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result?.error || "Unpublish failed");
+      }
+      return examId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "exams"] });
+      toast.success({ title: "Exam Unpublished", message: "Exam is no longer accessible to students" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Unpublish Failed", message: error.message });
+    },
+  });
+
+  // Archive exam mutation
+  const archiveMutation = useMutation({
+    mutationFn: async (examId: string) => {
+      const res = await authFetch(`/api/admin/exams/${examId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_archived: true }),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result?.error || "Archive failed");
+      }
+      return examId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "exams"] });
+      toast.success({ title: "Exam Archived", message: "Exam has been archived and hidden from students" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Archive Failed", message: error.message });
+    },
+  });
+
+  // Unarchive exam mutation
+  const unarchiveMutation = useMutation({
+    mutationFn: async (examId: string) => {
+      const res = await authFetch(`/api/admin/exams/${examId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_archived: false }),
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result?.error || "Unarchive failed");
+      }
+      return examId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "exams"] });
+      toast.success({ title: "Exam Unarchived", message: "Exam is no longer archived" });
+    },
+    onError: (error: any) => {
+      toast.error({ title: "Unarchive Failed", message: error.message });
+    },
+  });
+
   const columns = [
     { key: "title", label: "Exam Title" },
-    { key: "status", label: "Status", width: "120px" },
-    { key: "access_type", label: "Access Type", width: "120px" },
-    { key: "created", label: "Created", width: "150px" },
-    { key: "actions", label: "Actions", width: "200px" },
+    { key: "status_actions", label: "Actions", width: "550px" },
   ];
 
   const renderCell = (exam: Exam, column: any) => {
@@ -96,47 +193,90 @@ export default function AdminExamsPage() {
         return (
           <div>
             <div className="font-medium text-gray-900">{exam.title}</div>
-            <div className="text-sm text-gray-500">ID: {exam.id.slice(0, 8)}...</div>
+            <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+              <span>ID: {exam.id.slice(0, 8)}...</span>
+              <span>•</span>
+              <span>Created: {exam.created_at ? new Date(exam.created_at).toLocaleDateString() : "-"}</span>
+            </div>
           </div>
         );
-      case "status":
-        return <StatusBadge status={exam.status} size="sm" />;
-      case "access_type":
+      case "status_actions":
+        const examStatus = getExamStatus(exam);
+        
+        // Smart contextual button logic
+        let smartAction: { label: string; onClick: () => void; loading: boolean; variant: "primary" | "secondary" } | null = null;
+        
+        if (exam.is_archived) {
+          smartAction = {
+            label: "Unarchive",
+            onClick: () => unarchiveMutation.mutate(exam.id),
+            loading: unarchiveMutation.isPending,
+            variant: "primary"
+          };
+        } else if (examStatus.canAccess) {
+          // Live exam - offer unpublish
+          smartAction = {
+            label: "Unpublish",
+            onClick: () => unpublishMutation.mutate(exam.id),
+            loading: unpublishMutation.isPending,
+            variant: "secondary"
+          };
+        } else if (examStatus.status === 'Done') {
+          // Ended exam - offer archive
+          smartAction = {
+            label: "Archive",
+            onClick: () => archiveMutation.mutate(exam.id),
+            loading: archiveMutation.isPending,
+            variant: "secondary"
+          };
+        } else {
+          // Draft or scheduled - offer publish
+          smartAction = {
+            label: "Publish",
+            onClick: () => publishMutation.mutate(exam.id),
+            loading: publishMutation.isPending,
+            variant: "primary"
+          };
+        }
+        
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            {exam.access_type}
-          </span>
-        );
-      case "created":
-        return exam.created_at ? new Date(exam.created_at).toLocaleDateString() : "-";
-      case "actions":
-        return (
-          <div className="flex items-center gap-2">
-            <Link href={`/admin/exams/${exam.id}/edit`}>
-              <ActionButton variant="secondary" size="sm">Edit</ActionButton>
-            </Link>
-           
-
-            <ActionButton
-              variant="secondary"
-              size="sm"
-              onClick={() => duplicateMutation.mutate(exam.id)}
-              loading={duplicateMutation.isPending}
-            >
-              Duplicate
-            </ActionButton>
-            <ActionButton
-              variant="danger"
-              size="sm"
-              onClick={() => {
-                if (confirm(`Are you sure you want to delete "${exam.title}"? This action cannot be undone.`)) {
-                  deleteMutation.mutate(exam.id);
-                }
-              }}
-              loading={deleteMutation.isPending}
-            >
-              Delete
-            </ActionButton>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Ultra-minimal Status Badge */}
+            <EnhancedStatusBadge exam={exam} size="sm" showTimeInfo />
+            
+            {/* Divider */}
+            <div className="h-8 w-px bg-gray-300"></div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              
+              
+              {/* Smart Contextual Button */}
+              {smartAction && (
+                <ActionButton
+                  variant={smartAction.variant}
+                  size="sm"
+                  onClick={smartAction.onClick}
+                  loading={smartAction.loading}
+                >
+                  {smartAction.label}
+                </ActionButton>
+              )}
+              
+              {/* Delete button - always show */}
+              <ActionButton
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete "${exam.title}"? This action cannot be undone.`)) {
+                    deleteMutation.mutate(exam.id);
+                  }
+                }}
+                loading={deleteMutation.isPending}
+              >
+                Delete
+              </ActionButton>
+            </div>
           </div>
         );
       default:
@@ -184,8 +324,61 @@ export default function AdminExamsPage() {
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Status Filter Tabs */}
       <ModernCard>
+        <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-200 pb-4">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              statusFilter === 'all'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            All ({allExams.length})
+          </button>
+          <button
+            onClick={() => setStatusFilter('live')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              statusFilter === 'live'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Live ({liveCount})
+          </button>
+          <button
+            onClick={() => setStatusFilter('upcoming')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              statusFilter === 'upcoming'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Upcoming ({upcomingCount})
+          </button>
+          <button
+            onClick={() => setStatusFilter('ended')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              statusFilter === 'ended'
+                ? 'bg-gray-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Ended ({endedCount})
+          </button>
+          <button
+            onClick={() => setStatusFilter('archived')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              statusFilter === 'archived'
+                ? 'bg-gray-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Archived ({archivedCount})
+          </button>
+        </div>
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <SearchInput
             placeholder="Search exams by title..."
@@ -195,11 +388,7 @@ export default function AdminExamsPage() {
             className="lg:w-96"
           />
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>Total: {exams.length} exams</span>
-            <span>•</span>
-            <span>Published: {exams.filter(e => e.status === 'published').length}</span>
-            <span>•</span>
-            <span>Draft: {exams.filter(e => e.status === 'draft').length}</span>
+            <span>Showing: {exams.length} exams</span>
           </div>
         </div>
       </ModernCard>
@@ -209,6 +398,7 @@ export default function AdminExamsPage() {
         columns={columns}
         data={exams}
         renderCell={renderCell}
+        onRowClick={(exam) => router.push(`/admin/exams/${exam.id}/edit`)}
         loading={isLoading}
         emptyMessage={
           searchQuery 

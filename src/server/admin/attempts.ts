@@ -184,7 +184,7 @@ export async function attemptsIdStateGET(req: NextRequest, attemptId: string) {
     if (ensuredExamId) {
       const qRes = await supabase
         .from("questions")
-        .select("id, question_text, question_type, options, points, required, order_index, correct_answers, created_at")
+        .select("id, question_text, question_type, options, points, required, order_index, correct_answers, created_at, auto_grade_on_answer")
         .eq("exam_id", ensuredExamId)
         .order("order_index", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
@@ -199,6 +199,7 @@ export async function attemptsIdStateGET(req: NextRequest, attemptId: string) {
           required: (q as any).required,
           order_index: (q as any).order_index,
           correct_answers: (q as any).correct_answers,
+          auto_grade_on_answer: (q as any).auto_grade_on_answer,
         }));
 
         const mg = await supabase

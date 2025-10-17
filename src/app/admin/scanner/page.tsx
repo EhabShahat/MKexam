@@ -46,9 +46,11 @@ export default function ScannerPage() {
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [typedCode, setTypedCode] = useState("");
-  const [pauseOnScan, setPauseOnScan] = useState(true);
+  const [pauseOnScan, setPauseOnScan] = useState(false); // Changed to false for continuous scanning
   const [quality, setQuality] = useState<'low' | 'med' | 'high'>('med');
   const [showAllRecords, setShowAllRecords] = useState(false);
+  const [cameraResolution, setCameraResolution] = useState<string>("");
+  const [scanQueue, setScanQueue] = useState<StudentSummary[]>([]); // Queue for batch recording
 
   useEffect(() => {
     const hasLegacy = typeof navigator !== 'undefined' && (
@@ -162,6 +164,52 @@ export default function ScannerPage() {
     },
   });
 
+  // Batch record all students in queue
+  const batchRecordMutation = useMutation({
+    mutationFn: async (students: StudentSummary[]) => {
+      const results = { success: 0, already: 0, failed: 0 };
+      
+      for (const student of students) {
+        try {
+          const res = await authFetch("/api/admin/attendance?action=scan", { 
+            method: "POST", 
+            body: JSON.stringify({ studentId: student.student_id }) 
+          });
+          const j = await res.json();
+          if (res.ok) {
+            if (j.already_attended) {
+              results.already++;
+            } else {
+              results.success++;
+            }
+          } else {
+            results.failed++;
+          }
+        } catch {
+          results.failed++;
+        }
+      }
+      
+      return results;
+    },
+    onSuccess: (results) => {
+      qc.invalidateQueries({ queryKey: ["admin", "attendance", "recent"] });
+      setScanQueue([]); // Clear queue after recording
+      setSelectedStudent(null);
+      setAttendance(null);
+      
+      const total = results.success + results.already + results.failed;
+      let message = `Recorded ${results.success} student${results.success !== 1 ? 's' : ''}`;
+      if (results.already > 0) message += `, ${results.already} already marked`;
+      if (results.failed > 0) message += `, ${results.failed} failed`;
+      
+      toast.success({ title: "Batch Recording Complete", message });
+    },
+    onError: (e: any) => {
+      toast.error({ title: "Batch Recording Failed", message: e?.message || "Unknown error" });
+    },
+  });
+
   function findStudentByCode(code: string): StudentSummary | null {
     const c = code.trim();
     if (!c) return null;
@@ -233,14 +281,32 @@ export default function ScannerPage() {
         const mod = await import("@zxing/browser");
         readerRef.current = new mod.BrowserQRCodeReader();
       }
-      // Map quality to constraints
-      const dims = quality === 'low' ? { w: 480, h: 360, fps: 24 } : quality === 'high' ? { w: 1280, h: 720, fps: 30 } : { w: 640, h: 480, fps: 30 };
+      // Map quality to smarter constraints with higher maximums
+      const dims = quality === 'low' 
+        ? { idealW: 640, idealH: 480, maxW: 1280, maxH: 720, fps: 24 } 
+        : quality === 'high' 
+        ? { idealW: 1920, idealH: 1080, maxW: 3840, maxH: 2160, fps: 30 } 
+        : { idealW: 1280, idealH: 720, maxW: 1920, maxH: 1080, fps: 30 };
+      
       const constraints: MediaStreamConstraints = {
         video: {
-          ...(selectedDeviceId !== 'auto' ? { deviceId: { exact: selectedDeviceId } } : { facingMode: { ideal: "environment" } }),
-          width: { ideal: dims.w },
-          height: { ideal: dims.h },
-          frameRate: { ideal: dims.fps }
+          ...(selectedDeviceId !== 'auto' 
+            ? { deviceId: { exact: selectedDeviceId } } 
+            : { 
+                facingMode: { ideal: "environment" },
+                // Request highest available resolution for rear camera
+                aspectRatio: { ideal: 16/9 }
+              }
+          ),
+          width: { ideal: dims.idealW, max: dims.maxW },
+          height: { ideal: dims.idealH, max: dims.maxH },
+          frameRate: { ideal: dims.fps },
+          // Advanced constraints for better camera selection
+          advanced: [
+            { focusMode: "continuous" } as any,
+            { torch: true } as any,
+            { zoom: 1.0 } as any
+          ]
         },
         audio: false
       } as any;
@@ -253,35 +319,47 @@ export default function ScannerPage() {
           setLastScanAt(now);
           const text = String(result.getText()).trim();
           if (text) {
-            vibrate();
-            beep();
-            // Do NOT auto-record. Select the student and wait for admin to click Record.
             const stu = findStudentByCode(text);
             if (stu) {
-              setSelectedStudent(stu);
-              setAttendance(null);
-              setAlreadyAttended(false);
-              toast.info({ message: `Scanned: ${stu.student_name || ''} (${stu.code})`, duration: 1800 });
-              if (pauseOnScan) {
-                // Pause scanning to prevent overwriting selection
-                stopScanning();
-              }
+              // Check if already in queue
+              setScanQueue(prev => {
+                const exists = prev.find(s => s.student_id === stu.student_id);
+                if (exists) {
+                  // Already in queue - visual feedback only
+                  toast.info({ message: `Already in queue: ${stu.student_name || stu.code}`, duration: 1000 });
+                  return prev;
+                } else {
+                  // Add to queue
+                  vibrate();
+                  beep();
+                  toast.success({ message: `Added to queue: ${stu.student_name || stu.code}`, duration: 1200 });
+                  return [...prev, stu];
+                }
+              });
             } else {
-              toast.error({ message: `Student not found for code: ${text}`, duration: 2500 });
+              toast.error({ message: `Student not found: ${text}`, duration: 1500 });
             }
           }
         }
       });
       controlsRef.current = controls;
-      // Track and torch capability
+      // Track and torch capability + capture actual resolution
       try {
         const stream = (videoRef.current as any).srcObject as MediaStream | undefined;
         const track = stream?.getVideoTracks?.()[0] || null;
         trackRef.current = track;
         const caps = (track as any)?.getCapabilities?.() || {};
+        const settings = (track as any)?.getSettings?.() || {};
         const hasTorch = Boolean((caps as any).torch);
         setTorchAvailable(hasTorch);
         setTorchOn(false);
+        
+        // Display actual camera resolution
+        if (settings.width && settings.height) {
+          const deviceLabel = devices.find(d => d.deviceId === selectedDeviceId)?.label || 
+                             (selectedDeviceId === 'auto' ? 'Auto (Rear)' : 'Camera');
+          setCameraResolution(`${settings.width}x${settings.height} @ ${settings.frameRate || 30}fps - ${deviceLabel}`);
+        }
       } catch {}
       // List cameras (labels often populate after permission)
       refreshCameras();
@@ -297,6 +375,7 @@ export default function ScannerPage() {
     trackRef.current = null;
     setTorchAvailable(false); setTorchOn(false);
     setScanning(false);
+    setCameraResolution("");
   }
 
   // Stop scanner on unmount
@@ -322,10 +401,19 @@ export default function ScannerPage() {
   function applyTypedCode() {
     const stu = findStudentByCode(typedCode);
     if (stu) {
-      setSelectedStudent(stu);
-      setAttendance(null);
-      setAlreadyAttended(false);
-      toast.info({ message: `Selected: ${stu.student_name || ''} (${stu.code})`, duration: 1600 });
+      setScanQueue(prev => {
+        const exists = prev.find(s => s.student_id === stu.student_id);
+        if (!exists) {
+          beep();
+          vibrate();
+          toast.success({ message: `Added to queue: ${stu.student_name || stu.code}`, duration: 1200 });
+          return [...prev, stu];
+        } else {
+          toast.info({ message: `Already in queue: ${stu.student_name || stu.code}`, duration: 1000 });
+          return prev;
+        }
+      });
+      setTypedCode("");
     } else {
       toast.error({ message: `Not found: ${typedCode}`, duration: 2000 });
     }
@@ -507,6 +595,14 @@ export default function ScannerPage() {
                 QR Scanner
               </h1></div>
             <div className="flex items-center gap-3">
+              {scanQueue.length > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-full shadow-lg animate-pulse">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span className="text-sm font-bold">{scanQueue.length} in Queue</span>
+                </div>
+              )}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
                 <div className={`w-2 h-2 rounded-full ${scanning ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
                 <span className="text-sm font-medium text-emerald-700">
@@ -572,32 +668,44 @@ export default function ScannerPage() {
               </div>
 
               {/* Control Button - Always visible */}
-              <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-center">
-                {scanning ? (
-                  <button 
-                    className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2"
-                    onClick={stopScanning}
-                  >
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    Stop Scanning
-                  </button>
-                ) : (
-                  <button 
-                    className={`px-6 py-3 font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2 ${
-                      cameraSupported 
-                        ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
-                        : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                    }`}
-                    onClick={cameraSupported ? startScanning : undefined} 
-                    disabled={!cameraSupported}
-                    title={!cameraSupported ? 'Camera not supported - use search to select students manually' : ''}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12h-.01M12 12v4h1m1 0h.01" />
-                    </svg>
-                    {!cameraSupported ? 'Camera Not Supported' : (selectedStudent && pauseOnScan ? 'Resume Scanning' : 'Start Scanning')}
-                  </button>
-                )}
+              <div className="p-4 bg-gray-50 border-t border-gray-200">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  {scanning ? (
+                    <button 
+                      className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2"
+                      onClick={stopScanning}
+                    >
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                      Stop Scanning
+                    </button>
+                  ) : (
+                    <button 
+                      className={`px-6 py-3 font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2 ${
+                        cameraSupported 
+                          ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
+                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      }`}
+                      onClick={cameraSupported ? startScanning : undefined} 
+                      disabled={!cameraSupported}
+                      title={!cameraSupported ? 'Camera not supported - use search to select students manually' : ''}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12h-.01M12 12v4h1m1 0h.01" />
+                      </svg>
+                      {!cameraSupported ? 'Camera Not Supported' : (selectedStudent && pauseOnScan ? 'Resume Scanning' : 'Start Scanning')}
+                    </button>
+                  )}
+                  
+                  {/* Camera Resolution Info */}
+                  {scanning && cameraResolution && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-xs font-medium text-blue-700">{cameraResolution}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               {scanError && (
                 <div className="p-4 bg-red-50 border-t border-red-200 flex items-center gap-3">
@@ -647,8 +755,22 @@ export default function ScannerPage() {
                   {searchResults.map((s) => (
                     <button 
                       key={s.student_id} 
-                      className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors group" 
-                      onClick={() => { setSelectedStudent(s); setAttendance(null); setAlreadyAttended(false); setSearch(""); }}
+                      className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors group" 
+                      onClick={() => {
+                        setScanQueue(prev => {
+                          const exists = prev.find(st => st.student_id === s.student_id);
+                          if (!exists) {
+                            beep();
+                            vibrate();
+                            toast.success({ message: `Added to queue: ${s.student_name || s.code}`, duration: 1000 });
+                            return [...prev, s];
+                          } else {
+                            toast.info({ message: `Already in queue: ${s.student_name || s.code}`, duration: 1000 });
+                            return prev;
+                          }
+                        });
+                        setSearch("");
+                      }}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
@@ -678,6 +800,90 @@ export default function ScannerPage() {
                 </div>
               )}
             </div>
+
+          {/* Scan Queue */}
+          {scanQueue.length > 0 && (
+            <div className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-300 rounded-2xl shadow-lg overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-600 to-green-600 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold text-lg">Scan Queue</h3>
+                      <p className="text-emerald-100 text-sm">{scanQueue.length} student{scanQueue.length !== 1 ? 's' : ''} ready to record</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setScanQueue([])}
+                      className="px-3 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Queue List */}
+              <div className="p-4 max-h-96 overflow-y-auto space-y-2">
+                {scanQueue.map((student, index) => (
+                  <div 
+                    key={student.student_id} 
+                    className="bg-white rounded-xl p-3 border border-emerald-200 shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900">{student.student_name || 'Unknown'}</div>
+                        <div className="text-sm text-gray-500">Code: {student.code}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setScanQueue(prev => prev.filter(s => s.student_id !== student.student_id))}
+                      className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
+                      title="Remove from queue"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Record All Button */}
+              <div className="p-4 bg-white border-t-2 border-emerald-200">
+                <button
+                  onClick={() => batchRecordMutation.mutate(scanQueue)}
+                  disabled={batchRecordMutation.isPending}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                >
+                  {batchRecordMutation.isPending ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Recording {scanQueue.length} Students...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Record All ({scanQueue.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Selected student card */}
           {selectedStudent && (

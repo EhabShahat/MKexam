@@ -36,12 +36,12 @@ export async function examsByCodeGET(req: NextRequest) {
     const studentId = (stuRows[0] as { id: string; student_name?: string | null }).id;
     const studentName = (stuRows[0] as { id: string; student_name?: string | null }).student_name || null;
 
-    // 2) Fetch all published code-based exams
+    // 2) Fetch all accessible code-based exams (using new status system)
     const { data: exams, error: exErr } = await svc
       .from("exams")
-      .select("id, title, description, duration_minutes, start_time, end_time, status, access_type")
-      .eq("status", "published")
+      .select("id, title, description, duration_minutes, start_time, end_time, status, access_type, scheduling_mode, is_manually_published, is_archived")
       .eq("access_type", "code_based")
+      .eq("is_archived", false)
       .order("created_at", { ascending: false });
 
     if (exErr) {
@@ -77,7 +77,39 @@ export async function examsByCodeGET(req: NextRequest) {
     }
 
     const now = new Date();
-    const result = (exams || []).map((e: any) => {
+    
+    // Filter exams by accessibility using new status system
+    const accessibleExams = (exams || []).filter((e: any) => {
+      // Archived exams are never accessible (already filtered by query, but double-check)
+      if (e.is_archived) return false;
+      
+      const schedulingMode = e.scheduling_mode || 'Auto';
+      const isManuallyPublished = e.is_manually_published || false;
+      const start = e.start_time ? new Date(e.start_time) : null;
+      const end = e.end_time ? new Date(e.end_time) : null;
+      
+      // Manual mode: only accessible if manually published
+      if (schedulingMode === 'Manual') {
+        return isManuallyPublished;
+      }
+      
+      // Auto mode: check time-based accessibility with manual override
+      if (schedulingMode === 'Auto') {
+        // Early publish override
+        if (isManuallyPublished && end && now < end) {
+          return true;
+        }
+        
+        // Standard time-based: accessible between start and end
+        if (start && end && now >= start && now < end) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+    
+    const result = accessibleExams.map((e: any) => {
       const start = e.start_time ? new Date(e.start_time) : null;
       const end = e.end_time ? new Date(e.end_time) : null;
       const not_started = !!(start && now < start);

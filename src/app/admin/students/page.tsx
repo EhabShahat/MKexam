@@ -10,7 +10,7 @@ import { useMemo, useState, useEffect, useRef, Fragment } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/authFetch";
 import { useToast } from "@/components/ToastProvider";
-import QRCode from "qrcode";
+import IdCardCanvas from "@/components/IdCard/IdCardCanvas";
 import { useLocalNameDuplicateCheck, useLocalDuplicateCheck, DuplicateStudent } from "@/hooks/useLocalDuplicateCheck";
 
 interface Student {
@@ -22,6 +22,7 @@ interface Student {
   address?: string | null;
   national_id?: string | null;
   photo_url?: string | null;
+  created_at?: string;
   national_id_photo_url?: string | null;
   student_created_at: string;
   total_exams_attempted?: number;
@@ -54,11 +55,24 @@ export default function GlobalStudentsPage() {
   const [isAddStudentExpanded, setIsAddStudentExpanded] = useState(false);
   // Modal state for showing ID card popup
   const [idCardStudentId, setIdCardStudentId] = useState<string | null>(null);
-  const [photoModal, setPhotoModal] = useState<{ url: string; title: string } | null>(null);
   // Edit modal state
   const [editModalStudent, setEditModalStudent] = useState<Student | null>(null);
   // Full-screen image viewer
   const [fullScreenImage, setFullScreenImage] = useState<{ url: string; title: string } | null>(null);
+  // Expanded card details tracking
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  
+  const toggleCardExpansion = (studentId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
   
   // Function to send WhatsApp message
   function sendWhatsApp(student: any) {
@@ -312,15 +326,45 @@ export default function GlobalStudentsPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const saveRow = useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+    mutationFn: async ({ id, payload, photoFile, nationalIdPhotoFile }: { id: string; payload: any; photoFile?: File | null; nationalIdPhotoFile?: File | null }) => {
       if (!id || id === 'undefined') {
         throw new Error("Invalid student ID");
       }
       setActionError(null);
-      const res = await authFetch(`/api/admin/students/${id}`, { 
-        method: "PATCH", 
-        body: JSON.stringify(payload) 
-      });
+      
+      let res: Response;
+      // If files are included, use FormData
+      if (photoFile || nationalIdPhotoFile) {
+        const fd = new FormData();
+        
+        // Always include all text fields to ensure backend sees this as a valid update
+        // even if only photos changed
+        fd.append("student_name", payload.student_name || "");
+        fd.append("mobile_number", payload.mobile_number || "");
+        if (payload.mobile_number2) fd.append("mobile_number2", payload.mobile_number2);
+        if (payload.address) fd.append("address", payload.address);
+        if (payload.national_id) fd.append("national_id", payload.national_id);
+        
+        // Add photos
+        if (photoFile) {
+          fd.append("user_photo", photoFile);
+        }
+        if (nationalIdPhotoFile) {
+          fd.append("national_id_photo", nationalIdPhotoFile);
+        }
+        
+        res = await fetch(`/api/admin/students/${id}`, {
+          method: "PATCH",
+          body: fd,
+          credentials: "include",
+        });
+      } else {
+        res = await authFetch(`/api/admin/students/${id}`, { 
+          method: "PATCH", 
+          body: JSON.stringify(payload) 
+        });
+      }
+      
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "Update failed");
       return j.student as Student;
@@ -854,110 +898,219 @@ export default function GlobalStudentsPage() {
             </div>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <tr>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Code</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Student</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Created</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {paginatedStudents.length === 0 && filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                          </svg>
-                        </div>
-                        <p className="text-lg font-semibold text-gray-900 mb-1">No students found</p>
-                        <p className="text-sm text-gray-500">{q ? "Try a different search term" : "Add students to get started"}</p>
-                      </div>
-                    </td>
-                  </tr>
+          {/* Card Grid Layout */}
+          <div className="p-4">
+            {paginatedStudents.length === 0 && filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <p className="text-xl font-semibold text-gray-900 mb-2">No students found</p>
+                <p className="text-sm text-gray-500">{q ? "Try a different search term" : "Add students to get started"}</p>
+              </div>
             ) : (
-              paginatedStudents.map((s) => {
-                const studentId = s.student_id;
-                const e = edits[studentId] || {};
-                return (
-                  <Fragment key={studentId}>
-                    <tr key={studentId} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-mono font-medium">{s.code}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                {paginatedStudents.map((s) => {
+                  const studentId = s.student_id;
+                  return (
+                    <div
+                      key={studentId}
+                      className="group bg-gradient-to-br from-white to-gray-50 rounded-2xl border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 overflow-hidden"
+                    >
+                      {/* Avatar Section */}
+                      <div className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-6 pt-6 pb-4">
+                        {/* Code Badge - Top Right */}
+                        <div className="absolute top-3 right-3 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200">
+                          <span className="text-sm font-bold text-gray-800 font-mono">#{s.code}</span>
+                        </div>
+                        
+                        {/* Avatar - Centered & Clickable */}
+                        <div className="flex justify-center">
                           {s.photo_url ? (
                             <button
                               type="button"
-                              className="w-8 h-8 rounded-full overflow-hidden border border-gray-200"
-                              title="View photo"
-                              onClick={() => setPhotoModal({ url: s.photo_url as string, title: s.student_name || "Student Photo" })}
+                              className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg hover:scale-110 hover:border-blue-400 transition-all duration-300 cursor-pointer"
+                              onClick={() => setFullScreenImage({ url: s.photo_url as string, title: s.student_name || "Student Photo" })}
+                              title="Click to view full size"
                             >
-                              <img src={s.photo_url || ""} alt="Photo" className="w-8 h-8 object-cover" />
+                              <img 
+                                src={s.photo_url} 
+                                alt={s.student_name || "Student"} 
+                                className="w-full h-full object-cover"
+                              />
                             </button>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-600">
-                              {((s.student_name || "-").trim()[0] || "-").toUpperCase()}
+                            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-200 to-indigo-300 border-4 border-white shadow-lg flex items-center justify-center">
+                              <span className="text-3xl font-bold text-white">
+                                {((s.student_name || "?").trim()[0] || "?").toUpperCase()}
+                              </span>
                             </div>
                           )}
-                          <span className="font-medium">{s.student_name || "-"}</span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <svg className="w-4 h-4 text-gray-400 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </div>
+
+                      {/* Content Section */}
+                      <div className="px-4 py-4 space-y-3">
+                        {/* Name */}
+                        <div className="text-center">
+                          <h3 className="font-semibold text-gray-900 text-base line-clamp-2 min-h-[3rem] flex items-center justify-center">
+                            {s.student_name || "Unnamed Student"}
+                          </h3>
+                        </div>
+
+                        {/* Info Toggle Button */}
+                        <button
+                          onClick={() => toggleCardExpansion(studentId)}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
+                        >
+                          <svg 
+                            className={`w-4 h-4 transition-transform duration-200 ${expandedCards.has(studentId) ? 'rotate-180' : ''}`} 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
-                          {new Date(s.student_created_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {expandedCards.has(studentId) ? 'Hide Details' : 'Show Details'}
+                          </span>
+                        </button>
+
+                        {/* Collapsible Details Section */}
+                        {expandedCards.has(studentId) && (
+                          <div className="bg-gray-50 rounded-xl p-3 space-y-2 text-sm border border-gray-200">
+                            {s.mobile_number && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">Mobile</p>
+                                  <p className="text-gray-900 font-medium break-all">{s.mobile_number}</p>
+                                </div>
+                              </div>
+                            )}
+                            {s.mobile_number2 && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">Mobile 2</p>
+                                  <p className="text-gray-900 font-medium break-all">{s.mobile_number2}</p>
+                                </div>
+                              </div>
+                            )}
+                            {s.address && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">Address</p>
+                                  <p className="text-gray-900 font-medium break-words">{s.address}</p>
+                                </div>
+                              </div>
+                            )}
+                            {s.national_id && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">National ID</p>
+                                  <p className="text-gray-900 font-medium break-all">{s.national_id}</p>
+                                </div>
+                              </div>
+                            )}
+                            {s.student_created_at && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">Created</p>
+                                  <p className="text-gray-900 font-medium">{new Date(s.student_created_at).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                            )}
+                            {(s.total_exams_attempted || s.completed_exams || s.in_progress_exams) && (
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-500 mb-0.5">Exam Stats</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {s.total_exams_attempted > 0 && (
+                                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                        {s.total_exams_attempted} Total
+                                      </span>
+                                    )}
+                                    {s.completed_exams > 0 && (
+                                      <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                        {s.completed_exams} Done
+                                      </span>
+                                    )}
+                                    {s.in_progress_exams > 0 && (
+                                      <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
+                                        {s.in_progress_exams} In Progress
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {!s.mobile_number && !s.mobile_number2 && !s.address && !s.national_id && (
+                              <p className="text-center text-gray-500 text-xs py-2">No additional details available</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col gap-2">
                           <button
-                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                             onClick={() => sendWhatsApp(s)}
                             disabled={!s.mobile_number}
                             title={s.mobile_number ? "Send code via WhatsApp" : "No mobile number"}
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                             </svg>
                             WhatsApp
                           </button>
-                          <button
-                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
-                            onClick={() => {
-                              setIdCardStudentId(studentId);
-                            }}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1">
-                              <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 4v-4H5a2 2 0 0 1-2-2V5zm2 0v10h14V5H5zm2 2h6v2H7V7zm0 4h10v2H7v-2z"/>
-                            </svg>
-                            ID Card
-                          </button>
-                          <button
-                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            onClick={() => setEditModalStudent(s)}
-                          >
-                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Edit
-                          </button>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg text-white bg-purple-600 hover:bg-purple-700 transition-colors shadow-sm"
+                              onClick={() => setIdCardStudentId(studentId)}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 4v-4H5a2 2 0 0 1-2-2V5zm2 0v10h14V5H5zm2 2h6v2H7V7zm0 4h10v2H7v-2z"/>
+                              </svg>
+                              ID Card
+                            </button>
+                            <button
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm"
+                              onClick={() => setEditModalStudent(s)}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Edit
+                            </button>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              })
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-              </tbody>
-            </table>
           </div>
           
           {/* Pagination Controls */}
@@ -1041,8 +1194,8 @@ export default function GlobalStudentsPage() {
               setEditModalStudent(null);
               setEdits({}); // Clear any pending edits
             }}
-            onSave={(studentId, payload) => {
-              saveRow.mutate({ id: studentId, payload });
+            onSave={(studentId, payload, photoFile, nationalIdPhotoFile) => {
+              saveRow.mutate({ id: studentId, payload, photoFile, nationalIdPhotoFile });
               setEditModalStudent(null);
             }}
             onResetAttempts={(studentId) => {
@@ -1133,7 +1286,7 @@ function FullScreenImageViewer({
   );
 }
 
-// Edit Student Modal Component
+// Edit Student Modal Component - Sidebar Split Layout (Option 2)
 function EditStudentModal({
   student,
   onClose,
@@ -1162,7 +1315,11 @@ function EditStudentModal({
     address: student.address || "",
     national_id: student.national_id || "",
   });
-
+  
+  const [photoPreview, setPhotoPreview] = useState<string | null>(student.photo_url || null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [nationalIdPhotoPreview, setNationalIdPhotoPreview] = useState<string | null>(student.national_id_photo_url || null);
+  const [nationalIdPhotoFile, setNationalIdPhotoFile] = useState<File | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
   // Track changes
@@ -1175,286 +1332,340 @@ function EditStudentModal({
       national_id: student.national_id || "",
     };
     
-    setHasChanges(JSON.stringify(formData) !== JSON.stringify(originalData));
-  }, [formData, student]);
+    const dataChanged = JSON.stringify(formData) !== JSON.stringify(originalData);
+    const photoChanged = photoFile !== null;
+    const nationalIdChanged = nationalIdPhotoFile !== null;
+    
+    setHasChanges(dataChanged || photoChanged || nationalIdChanged);
+  }, [formData, photoFile, nationalIdPhotoFile, student]);
 
   const handleChange = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [field]: e.target.value }));
   };
 
-  const handleSave = () => {
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Photo must be less than 5MB");
+        return;
+      }
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleNationalIdPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Photo must be less than 5MB");
+        return;
+      }
+      setNationalIdPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNationalIdPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async () => {
     if (hasChanges) {
-      onSave(student.student_id, formData);
+      onSave(student.student_id, formData, photoFile, nationalIdPhotoFile);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-1 sm:p-4">
-      <div className="bg-white rounded-xl sm:rounded-3xl w-full max-w-4xl h-[98vh] sm:max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-5xl h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row">
         
-        {/* Compact Header */}
-        <div className="px-3 sm:px-8 py-2 sm:py-6 bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2 sm:mb-4">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg">
-                <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">Edit Student</h3>
-                <p className="text-sm sm:text-base text-gray-600 hidden sm:block">Modify student information</p>
-              </div>
-            </div>
+        {/* LEFT SIDEBAR */}
+        <div className="w-full md:w-80 bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 border-r border-gray-200 flex flex-col overflow-y-auto">
+          
+          {/* Close Button - Top Right */}
+          <div className="absolute top-4 right-4 md:relative md:top-0 md:right-0 md:flex md:justify-end md:p-4 z-10">
             <button 
               onClick={onClose}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg sm:rounded-xl transition-colors touch-manipulation"
+              className="p-2 bg-white/80 hover:bg-white rounded-lg transition-colors shadow-md"
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* Compact Student Image */}
-          <div className="flex justify-center mb-2 sm:mb-4">
-            {student.photo_url ? (
-              <button
-                onClick={() => onImageClick(student.photo_url!, student.student_name || "Student Photo")}
-                className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg sm:rounded-2xl overflow-hidden border-2 sm:border-4 border-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 touch-manipulation"
+          {/* Photo Section */}
+          <div className="p-6 flex flex-col items-center space-y-4">
+            {/* Student Photo */}
+            <div className="relative">
+              {photoPreview ? (
+                <button
+                  onClick={() => photoPreview && onImageClick(photoPreview, student.student_name || "Student Photo")}
+                  className="w-32 h-32 rounded-2xl overflow-hidden border-4 border-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+                >
+                  <img 
+                    src={photoPreview} 
+                    alt={student.student_name || "Student"} 
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ) : (
+                <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-4 border-white shadow-lg">
+                  <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+              )}
+              {/* Photo Upload Button */}
+              <label 
+                htmlFor="photo-upload"
+                className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full shadow-lg cursor-pointer transition-colors"
               >
-                <img 
-                  src={student.photo_url} 
-                  alt={student.student_name || "Student"} 
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ) : (
-              <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-lg sm:rounded-2xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-2 sm:border-4 border-white shadow-lg">
-                <svg className="w-8 h-8 sm:w-16 sm:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-              </div>
-            )}
-          </div>
+                <input
+                  id="photo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
-          {/* Compact Student Info */}
-          <div className="text-center">
-            <div className="flex justify-center items-center gap-2 mb-1 sm:mb-2">
-              <span className="px-3 py-1 sm:px-4 sm:py-2 bg-blue-100 text-blue-800 rounded-lg sm:rounded-xl font-mono font-bold text-base sm:text-lg">
-                {student.code}
+            {/* Student Code */}
+            <div className="text-center">
+              <span className="px-4 py-2 bg-white rounded-xl font-mono font-bold text-xl text-indigo-700 shadow-md">
+                #{student.code}
               </span>
             </div>
-            <h4 className="text-base sm:text-xl font-semibold text-gray-900 mb-1 sm:mb-2">
-              {student.student_name || "No Name"}
-            </h4>
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-1 sm:gap-4 text-xs sm:text-sm text-gray-600">
-              <div className="flex items-center gap-1">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-xs">{new Date(student.student_created_at).toLocaleDateString()}</span>
-              </div>
-              {/* Compact Stats */}
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-                  {student.total_exams_attempted || 0}<span className="hidden sm:inline"> Attempted</span>
-                </span>
-                <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-medium">
-                  {student.completed_exams || 0}<span className="hidden sm:inline"> Completed</span>
-                </span>
-                <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-medium">
-                  {student.in_progress_exams || 0}<span className="hidden sm:inline"> Progress</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Compact Form */}
-        <div className="p-3 sm:p-8 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
             
             {/* Student Name */}
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Student Name
-              </label>
-              <input
-                type="text"
-                value={formData.student_name}
-                onChange={handleChange('student_name')}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
-                placeholder="Enter student's full name"
-              />
-            </div>
+            <h3 className="text-xl font-bold text-gray-900 text-center">
+              {student.student_name || "No Name"}
+            </h3>
+          </div>
 
-            {/* Mobile Number */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Mobile Number
-              </label>
-              <input
-                type="tel"
-                value={formData.mobile_number}
-                onChange={handleChange('mobile_number')}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
-                placeholder="Primary mobile number"
-              />
+          {/* Stats Section */}
+          <div className="px-6 py-4 bg-white/50 border-y border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-600 mb-3">Quick Stats</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Total</span>
+                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+                  {student.total_exams_attempted || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Completed</span>
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                  {student.completed_exams || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">In Progress</span>
+                <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium">
+                  {student.in_progress_exams || 0}
+                </span>
+              </div>
             </div>
+          </div>
 
-            {/* Alternative Mobile */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Alternative Mobile
+          {/* National ID Photo Section */}
+          <div className="px-6 py-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">🆔 National ID Card Photo</h4>
+            <div className="relative">
+              {nationalIdPhotoPreview ? (
+                <button
+                  onClick={() => nationalIdPhotoPreview && onImageClick(nationalIdPhotoPreview, "National ID Card")}
+                  className="w-full h-32 rounded-xl overflow-hidden border-2 border-gray-200 shadow hover:shadow-lg transition-all"
+                >
+                  <img 
+                    src={nationalIdPhotoPreview} 
+                    alt="National ID" 
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ) : (
+                <div className="w-full h-32 rounded-xl bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300">
+                  <div className="text-center">
+                    <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                    </svg>
+                    <p className="text-xs text-gray-500">No ID card photo</p>
+                  </div>
+                </div>
+              )}
+              <label 
+                htmlFor="national-id-upload"
+                className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg cursor-pointer transition-colors text-sm font-medium shadow"
+              >
+                Upload
+                <input
+                  id="national-id-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleNationalIdPhotoChange}
+                  className="hidden"
+                />
               </label>
-              <input
-                type="tel"
-                value={formData.mobile_number2}
-                onChange={handleChange('mobile_number2')}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
-                placeholder="Alternative mobile number"
-              />
             </div>
+          </div>
 
-            {/* National ID */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                National ID
-              </label>
-              <input
-                type="text"
-                value={formData.national_id}
-                onChange={handleChange('national_id')}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
-                placeholder="National ID number"
-              />
-            </div>
-
-            {/* Address */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Address
-              </label>
-              <input
-                type="text"
-                value={formData.address}
-                onChange={handleChange('address')}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-base"
-                placeholder="Student's address"
-              />
-            </div>
+          {/* Action Buttons */}
+          <div className="p-6 mt-auto space-y-2">
+            <button
+              onClick={() => onResetAttempts(student.student_id)}
+              disabled={isResetting || (student.total_exams_attempted || 0) === 0}
+              className="w-full px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              title={(student.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Reset attempts"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {isResetting ? "Resetting..." : "Reset Attempts"}
+            </button>
+            
+            <button
+              onClick={() => onDelete(student.student_id)}
+              disabled={isDeleting}
+              className="w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              {isDeleting ? "Deleting..." : "Delete Student"}
+            </button>
           </div>
         </div>
 
-        {/* Compact Mobile-First Footer */}
-        <div className="px-3 sm:px-8 py-3 sm:py-6 bg-gray-50 border-t border-gray-200 flex-shrink-0">
-          {/* Mobile: Stacked Layout */}
-          <div className="block sm:hidden space-y-3">
-            {/* Primary Action Row */}
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors disabled:opacity-50 touch-manipulation"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || isSaving}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed touch-manipulation"
-              >
-                {isSaving ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-sm">Saving...</span>
-                  </span>
-                ) : (
-                  hasChanges ? "Save Changes" : "No Changes"
-                )}
-              </button>
-            </div>
-            
-            {/* Secondary Actions Row */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => onResetAttempts(student.student_id)}
-                disabled={isResetting || (student.total_exams_attempted || 0) === 0}
-                className="flex-1 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed touch-manipulation"
-                title={(student.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake"}
-              >
-                {isResetting ? "Resetting..." : "Reset"}
-              </button>
+        {/* RIGHT MAIN CONTENT */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 className="text-2xl font-bold text-gray-900">Edit Student Information</h2>
+            <p className="text-sm text-gray-600 mt-1">Update student details below</p>
+          </div>
+
+          {/* Form Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="space-y-5">
+              {/* Student Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Student Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.student_name}
+                  onChange={handleChange('student_name')}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  placeholder="Enter student's full name"
+                />
+              </div>
+
+              {/* Mobile Numbers Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.mobile_number}
+                    onChange={handleChange('mobile_number')}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="Primary mobile"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Alternative Mobile
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.mobile_number2}
+                    onChange={handleChange('mobile_number2')}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="Alternative mobile"
+                  />
+                </div>
+              </div>
+
+              {/* National ID & Address Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    National ID
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.national_id}
+                    onChange={handleChange('national_id')}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="National ID number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={handleChange('address')}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="Student's address"
+                  />
+                </div>
+              </div>
+
               
-              <button
-                onClick={() => onDelete(student.student_id)}
-                disabled={isDeleting}
-                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed touch-manipulation"
-              >
-                {isDeleting ? "Deleting..." : "Delete"}
-              </button>
             </div>
           </div>
 
-          {/* Desktop: Original Layout */}
-          <div className="hidden sm:flex items-center justify-between w-full">
-            {/* Destructive Actions */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => onResetAttempts(student.student_id)}
-                disabled={isResetting || (student.total_exams_attempted || 0) === 0}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
-                title={(student.total_exams_attempted || 0) === 0 ? "No attempts to reset" : "Allow student to retake by clearing attempt links"}
-              >
-                {isResetting ? "Resetting..." : "Reset Attempts"}
-              </button>
-              
-              <button
-                onClick={() => onDelete(student.student_id)}
-                disabled={isDeleting}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
-              >
-                {isDeleting ? "Deleting..." : "Delete Student"}
-              </button>
-            </div>
-
-            {/* Save Actions */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onClose}
-                disabled={isSaving}
-                className="px-6 py-3 text-gray-700 hover:text-gray-900 font-medium transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || isSaving}
-                className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:cursor-not-allowed"
-              >
-                {isSaving ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving Changes...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {hasChanges ? "Save Changes" : "No Changes"}
-                  </span>
-                )}
-              </button>
-            </div>
+          {/* Footer - Save/Cancel */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-6 py-2.5 text-gray-700 hover:text-gray-900 font-medium transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges || isSaving}
+              className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSaving ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {hasChanges ? "Save Changes" : "No Changes"}
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -1467,6 +1678,7 @@ function IdCardModal({ student, brandLogoUrl, publicSettings, onClose }: { stude
   code: string;
   student_name: string | null;
   mobile_number: string | null;
+  photo_url?: string | null;
 }; brandLogoUrl?: string | null; publicSettings?: any; onClose: () => void }) {
   const cardRef = useRef<HTMLCanvasElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -1474,158 +1686,6 @@ function IdCardModal({ student, brandLogoUrl, publicSettings, onClose }: { stude
   const fullName = student?.student_name || "";
   const code = student?.code || "";
   const brandName = publicSettings?.brand_name || "";
-
-  const card = {
-    // Internal canvas resolution in pixels (kept numeric)
-    width: 720,
-    height: 960,
-    padding: 40,
-    bg: [
-      { color: "#0b2844", y: 0 },
-      { color: "#1b2b5a", y: 0.5 },
-      { color: "#28194b", y: 1 },
-    ],
-  } as const;
-
-  useEffect(() => {
-    let disposed = false;
-    async function draw() {
-      if (!cardRef.current) return;
-      const canvas = cardRef.current;
-      // Internal buffer size (sharpness)
-      canvas.width = card.width;
-      canvas.height = card.height;
-      // Fixed display size handled via JSX attributes to prevent stretching
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // Background gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, card.height);
-      card.bg.forEach((stop) => grad.addColorStop(stop.y, stop.color));
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, card.width, card.height);
-
-      // Decorative stars
-      ctx.globalAlpha = 0.15;
-      for (let i = 0; i < 120; i++) {
-        const x = Math.random() * card.width;
-        const y = Math.random() * card.height;
-        const r = Math.random() * 2;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = "#fff";
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-      // Calculate vertical centering
-      const totalContentHeight = 
-        20 + // Arabic text height
-        (brandName ? 45 : 0) + // Brand name height (if present)
-        30 + // Gap after header text
-        420 + 20 + // QR container height
-        30 + // Gap after QR
-        50 + // Name text height
-        15 + // Gap between name and code
-        36; // Code text height
-      
-      const startY = (card.height - totalContentHeight) / 2;
-      let currentY = startY;
-
-      // Header text above QR code
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      
-      // Arabic cathedral text
-      ctx.font = "600 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan'";
-      ctx.fillText("كاتدرائية مارمينا والبابا كيرلس", card.width / 2,  100);
-      currentY += 60;
-      
-      // Brand name (if available)
-      if (brandName) {
-        ctx.font = "500 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-        ctx.fillText(brandName, card.width / 2, 150);
-        currentY += 30;
-      }
-
-      // Gap after header text
-      currentY += 100;
-
-      // QR content
-      const qrText = code || "";
-
-      // Offscreen QR canvas
-      const qrSize = 420;
-      const off = document.createElement("canvas");
-      off.width = qrSize;
-      off.height = qrSize;
-      await QRCode.toCanvas(off, qrText || "", {
-        errorCorrectionLevel: "H",
-        margin: 1,
-        scale: 8,
-        color: { dark: "#0b0b0b", light: "#ffffff" },
-      });
-
-      // Rounded rectangle container (transparent fill per latest design)
-      const qrContainerW = qrSize + 20;
-      const qrContainerH = qrSize + 20;
-      const qrContainerX = (card.width - qrContainerW) / 2;
-      const qrContainerY = currentY;
-      roundRect(ctx, qrContainerX, qrContainerY, qrContainerW, qrContainerH, 28);
-      ctx.fillStyle = "rgba(255,255,255,.8)";
-      ctx.fill();
-
-      // Draw QR centered inside container
-      const qrX = (card.width - qrSize) / 2;
-      const qrY = qrContainerY + (qrContainerH - qrSize) / 2;
-      ctx.drawImage(off, qrX, qrY, qrSize, qrSize);
-
-      // Center logo over QR
-      if (brandLogoUrl) {
-        try {
-          const img = await loadImage(brandLogoUrl);
-          if (!disposed) {
-            const logoR = Math.floor(qrSize * 0.16);
-            const cx = card.width / 2;
-            const cy = qrY + qrSize / 2;
-            ctx.save();
-            // white circle backdrop
-            ctx.beginPath();
-            ctx.arc(cx, cy, logoR + 10, 0, Math.PI * 2);
-            ctx.fillStyle = "#ffffff";
-            ctx.fill();
-            ctx.closePath();
-            // draw logo clipped to circle
-            ctx.beginPath();
-            ctx.arc(cx, cy, logoR, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(img, cx - logoR, cy - logoR, logoR * 2, logoR * 2.5);
-            ctx.restore();
-          }
-        } catch {}
-      }
-
-      // Update currentY after QR container
-      currentY += qrContainerH + 30; // Gap after QR
-
-      // Name text
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "700 40px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-      ctx.textAlign = "center";
-      ctx.fillText(fullName || " ", card.width / 2, currentY + 35);
-      currentY += 65; // Name height + gap
-
-      // Code text
-      ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto";
-      ctx.fillStyle = "#d6e1ff";
-      ctx.fillText(code || " ", card.width / 2, currentY + 25);
-
-      setReady(true);
-    }
-    draw();
-    return () => { disposed = true; };
-  }, [brandLogoUrl, brandName, fullName, code]);
 
   const download = () => {
     if (!cardRef.current) return;
@@ -1688,22 +1748,16 @@ function IdCardModal({ student, brandLogoUrl, publicSettings, onClose }: { stude
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
-          <canvas
-            ref={cardRef}
-            width={450}
-            height={600}
-            style={{
-              width: 450,
-              height: 600,
-              minWidth: 450,
-              minHeight: 600,
-              maxWidth: 450,
-              maxHeight: 600,
-              display: "block",
-              flex: "0 0 auto",
-            }}
-            className="rounded-xl shadow-2xl border border-gray-200 shrink-0 grow-0 basis-auto"
-          />
+          <div ref={(el) => { if (el) cardRef.current = el.querySelector('canvas'); }}>
+            <IdCardCanvas
+              fullName={fullName}
+              code={code}
+              brandLogoUrl={brandLogoUrl}
+              brandName={brandName}
+              photoUrl={student?.photo_url || null}
+              onReady={() => setReady(true)}
+            />
+          </div>
         </div>
       </div>
     </div>

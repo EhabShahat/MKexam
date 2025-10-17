@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getCodeFormatSettings, generateRandomCode } from '@/lib/codeGenerator';
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing Supabase environment variables');
@@ -157,18 +158,26 @@ export async function approveRequest(requestId: string) {
     throw new Error('Request not found or already processed');
   }
 
-  // Generate student code
-  const { data: lastStudent, error: codeError } = await supabase
-    .from('students')
-    .select('code')
-    .order('code', { ascending: false })
-    .limit(1)
-    .single();
-
-  let newCode = '1001';
-  if (!codeError && lastStudent?.code) {
-    const lastCode = parseInt(lastStudent.code);
-    newCode = (lastCode + 1).toString();
+  // Generate random student code (same as Add New Student)
+  const codeSettings = await getCodeFormatSettings();
+  let newCode: string;
+  let attempts = 0;
+  
+  while (true) {
+    newCode = generateRandomCode(codeSettings);
+    attempts++;
+    if (attempts > 100) {
+      throw new Error('Failed to generate unique code after 100 attempts');
+    }
+    
+    // Check if code already exists
+    const { data: existing } = await supabase
+      .from('students')
+      .select('id')
+      .eq('code', newCode)
+      .maybeSingle();
+    
+    if (!existing) break; // Code is unique, use it
   }
 
   // Start transaction - Create student and update request

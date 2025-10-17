@@ -28,7 +28,11 @@ export default function AdminAttemptDetails() {
   const hasManualSections = !!(stateQ.data && Array.isArray((stateQ.data as any).questions));
   const ungradedQuestions = ((): any[] => {
     const qs = Array.isArray((stateQ.data as any)?.questions) ? (stateQ.data as any).questions : [];
-    return qs.filter((q: any) => q?.question_type === 'paragraph' || q?.question_type === 'photo_upload');
+    // Only include paragraph/photo_upload questions that don't have auto_grade_on_answer enabled
+    return qs.filter((q: any) => 
+      (q?.question_type === 'paragraph' || q?.question_type === 'photo_upload') && 
+      !q?.auto_grade_on_answer
+    );
   })();
   const manualMap: Record<string, { awarded_points?: number; notes?: string; graded_at?: string }> = (stateQ.data as any)?.manual_grades_map || {};
 

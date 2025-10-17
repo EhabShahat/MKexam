@@ -136,15 +136,72 @@ export async function studentsIdPATCH(req: NextRequest, studentId: string) {
     await requireAdmin(req);
     const token = await getBearerToken(req);
     const svc = supabaseServer(token || undefined);
-    const body = await req.json().catch(() => ({}));
+    const contentType = req.headers.get("content-type") || "";
 
-    const { student_name, mobile_number, mobile_number2, address, national_id } = body as any;
+    let payload: any = {};
+    let uploadedPhotoUrl: string | undefined = undefined;
+    let uploadedNationalIdPhotoUrl: string | undefined = undefined;
+
+    // Handle FormData (with optional file uploads)
+    if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData();
+      payload.student_name = String(form.get("student_name") || "").trim() || undefined;
+      payload.mobile_number = String(form.get("mobile_number") || "").trim() || undefined;
+      payload.mobile_number2 = String(form.get("mobile_number2") || "").trim() || undefined;
+      payload.address = String(form.get("address") || "").trim() || undefined;
+      payload.national_id = String(form.get("national_id") || "").trim() || undefined;
+
+      // Handle user photo upload
+      const userPhoto = form.get("user_photo") as File | null;
+      if (userPhoto && userPhoto.size > 0) {
+        const storageSvc = supabaseServer();
+        const ts = Date.now();
+        const rand = Math.random().toString(36).slice(2, 8);
+        const ext = (userPhoto.name.split(".").pop() || "png");
+        const path = `students/user/${ts}-${rand}.${ext}`;
+        const buf = new Uint8Array(await userPhoto.arrayBuffer());
+        const { error: upErr } = await storageSvc.storage
+          .from("student-files")
+          .upload(path, buf, { contentType: userPhoto.type || "image/png", upsert: false });
+        if (upErr) return NextResponse.json({ error: `Photo upload failed: ${upErr.message}` }, { status: 400 });
+        const { data: pub } = storageSvc.storage.from("student-files").getPublicUrl(path);
+        if (!pub?.publicUrl) return NextResponse.json({ error: "Failed to get photo URL" }, { status: 400 });
+        uploadedPhotoUrl = pub.publicUrl as string;
+      }
+
+      // Handle national ID photo upload
+      const nationalIdPhoto = form.get("national_id_photo") as File | null;
+      if (nationalIdPhoto && nationalIdPhoto.size > 0) {
+        const storageSvc = supabaseServer();
+        const ts = Date.now();
+        const rand = Math.random().toString(36).slice(2, 8);
+        const ext = (nationalIdPhoto.name.split(".").pop() || "png");
+        const path = `students/national_id/${ts}-${rand}.${ext}`;
+        const buf = new Uint8Array(await nationalIdPhoto.arrayBuffer());
+        const { error: upErr } = await storageSvc.storage
+          .from("student-files")
+          .upload(path, buf, { contentType: nationalIdPhoto.type || "image/png", upsert: false });
+        if (upErr) return NextResponse.json({ error: `National ID upload failed: ${upErr.message}` }, { status: 400 });
+        const { data: pub } = storageSvc.storage.from("student-files").getPublicUrl(path);
+        if (!pub?.publicUrl) return NextResponse.json({ error: "Failed to get national ID URL" }, { status: 400 });
+        uploadedNationalIdPhotoUrl = pub.publicUrl as string;
+      }
+    } else {
+      // Handle JSON
+      const body = await req.json().catch(() => ({}));
+      payload = body || {};
+    }
+
+    const { student_name, mobile_number, mobile_number2, address, national_id } = payload;
     const update: any = {};
     if (student_name !== undefined) update.student_name = student_name || null;
     if (mobile_number !== undefined) update.mobile_number = mobile_number || null;
     if (mobile_number2 !== undefined) update.mobile_number2 = mobile_number2 || null;
     if (address !== undefined) update.address = address || null;
     if (national_id !== undefined) update.national_id = national_id || null;
+    if (uploadedPhotoUrl) update.photo_url = uploadedPhotoUrl;
+    if (uploadedNationalIdPhotoUrl) update.national_id_photo_url = uploadedNationalIdPhotoUrl;
+
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
