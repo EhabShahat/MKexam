@@ -204,7 +204,8 @@ create table if not exists public.students (
   code text not null unique,
   student_name text null,
   mobile_number text null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- Add extended student profile columns (idempotent)
@@ -226,6 +227,40 @@ do $$ begin
     where table_schema = 'public' and table_name = 'students' and column_name = 'national_id'
   ) then
     alter table public.students add column national_id text null;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'students' and column_name = 'photo_url'
+  ) then
+    alter table public.students add column photo_url text null;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'students' and column_name = 'national_id_photo_url'
+  ) then
+    alter table public.students add column national_id_photo_url text null;
+  end if;
+end $$;
+
+-- Create trigger to auto-update updated_at for students
+create or replace function public.tg_set_students_updated_at()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'UPDATE' then
+    new.updated_at := now();
+  elsif TG_OP = 'INSERT' then
+    if new.updated_at is null then new.updated_at := now(); end if;
+  end if;
+  return new;
+end; $$;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_trigger where tgname = 'trg_students_updated_at'
+  ) then
+    create trigger trg_students_updated_at
+    before insert or update on public.students
+    for each row execute function public.tg_set_students_updated_at();
   end if;
 end $$;
 
@@ -284,13 +319,16 @@ create or replace view public.student_exam_summary with (security_invoker = true
     s.mobile_number2,
     s.address,
     s.national_id,
+    s.photo_url,
+    s.national_id_photo_url,
     count(sea.id) as total_exams_attempted,
     count(case when sea.status = 'completed' then 1 end) as completed_exams,
     count(case when sea.status = 'in_progress' then 1 end) as in_progress_exams,
-    s.created_at as student_created_at
+    s.created_at as student_created_at,
+    s.updated_at as student_updated_at
   from public.students s
   left join public.student_exam_attempts sea on sea.student_id = s.id
-  group by s.id, s.code, s.student_name, s.mobile_number, s.mobile_number2, s.address, s.national_id, s.created_at;
+  group by s.id, s.code, s.student_name, s.mobile_number, s.mobile_number2, s.address, s.national_id, s.photo_url, s.national_id_photo_url, s.created_at, s.updated_at;
 
 create table if not exists public.app_config (
   key text primary key,

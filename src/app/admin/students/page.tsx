@@ -494,6 +494,161 @@ export default function GlobalStudentsPage() {
     }
   }
 
+  // Export to CSV
+  const [isExporting, setIsExporting] = useState(false);
+  async function exportToCSV() {
+    setIsExporting(true);
+    try {
+      const studentsToExport = filtered || students || [];
+      
+      // Create CSV content with UTF-8 BOM for Arabic support
+      const headers = ['student_name', 'mobile_number', 'code', 'mobile_number2', 'address', 'national_id', 'created_at'];
+      const csvContent = [
+        headers.join(','),
+        ...studentsToExport.map(s => [
+          `"${(s.student_name || '').replace(/"/g, '""')}"`,
+          `"${(s.mobile_number || '').replace(/"/g, '""')}"`,
+          `"${(s.code || '').replace(/"/g, '""')}"`,
+          `"${(s.mobile_number2 || '').replace(/"/g, '""')}"`,
+          `"${(s.address || '').replace(/"/g, '""')}"`,
+          `"${(s.national_id || '').replace(/"/g, '""')}"`,
+          `"${(s.student_created_at || '').replace(/"/g, '""')}"`
+        ].join(','))
+      ].join('\n');
+
+      // Add UTF-8 BOM for proper Arabic encoding in Excel
+      const BOM = '\uFEFF';
+      const csvWithBOM = BOM + csvContent;
+
+      // Create and download file
+      const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `students_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      
+      toast.success(`Exported ${studentsToExport.length} students`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  // Download all ID cards
+  const [isDownloadingCards, setIsDownloadingCards] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+  
+  async function downloadAllIdCards() {
+    setIsDownloadingCards(true);
+    try {
+      const studentsToDownload = filtered || students || [];
+      
+      if (studentsToDownload.length === 0) {
+        toast.error('No students to download');
+        setIsDownloadingCards(false);
+        return;
+      }
+
+      setDownloadProgress({ current: 0, total: studentsToDownload.length });
+      toast.success(`Preparing ${studentsToDownload.length} ID cards...`);
+      
+      // Fetch settings for brand info
+      const settingsRes = await authFetch("/api/public/settings");
+      const settingsData = await settingsRes.json();
+      const brandLogoUrl = settingsData?.brand_logo_url || null;
+      const brandName = settingsData?.brand_name || "";
+      
+      // Dynamic import JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      // Create a hidden container for rendering ID cards
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      document.body.appendChild(container);
+      
+      try {
+        // Generate each ID card
+        for (let i = 0; i < studentsToDownload.length; i++) {
+          const student = studentsToDownload[i];
+          setDownloadProgress({ current: i + 1, total: studentsToDownload.length });
+          
+          // Create a wrapper for the ID card
+          const wrapper = document.createElement('div');
+          container.appendChild(wrapper);
+          
+          // Import React and ReactDOM dynamically
+          const React = await import('react');
+          const ReactDOM = await import('react-dom/client');
+          
+          // Render the ID card
+          const root = ReactDOM.createRoot(wrapper);
+          await new Promise<void>((resolve) => {
+            root.render(
+              React.createElement(IdCardCanvas, {
+                fullName: student.student_name || 'N/A',
+                code: student.code,
+                brandLogoUrl,
+                brandName,
+                photoUrl: student.photo_url,
+                onReady: () => resolve(),
+              })
+            );
+          });
+          
+          // Wait a bit for rendering
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Find the canvas element
+          const canvas = wrapper.querySelector('canvas');
+          if (canvas) {
+            // Convert to blob
+            const blob = await new Promise<Blob>((resolve) => {
+              canvas.toBlob((b) => resolve(b!), 'image/png');
+            });
+            
+            // Add to zip with sanitized filename
+            const filename = `${student.code}_${(student.student_name || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
+            zip.file(filename, blob);
+          }
+          
+          // Clean up
+          root.unmount();
+          wrapper.remove();
+          
+          // Update progress toast every 5 students
+          if ((i + 1) % 5 === 0) {
+            toast.success(`Generated ${i + 1}/${studentsToDownload.length} cards...`);
+          }
+        }
+      } finally {
+        // Clean up container
+        document.body.removeChild(container);
+      }
+      
+      // Generate and download zip
+      toast.success('Creating ZIP file...');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = `id_cards_${new Date().toISOString().split('T')[0]}.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      
+      toast.success(`Downloaded ${studentsToDownload.length} ID cards!`);
+    } catch (error: any) {
+      console.error('Download error:', error);
+      toast.error(error?.message || 'Failed to download ID cards');
+    } finally {
+      setIsDownloadingCards(false);
+      setDownloadProgress({ current: 0, total: 0 });
+    }
+  }
+
   if (isLoading) return (
     <div className="p-8 text-center">
       <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
@@ -529,7 +684,47 @@ export default function GlobalStudentsPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Student 
               </h1></div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* Export CSV Button */}
+              <button
+                onClick={exportToCSV}
+                disabled={isExporting || !students || students.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExporting ? (
+                  <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium text-green-700">
+                  {isExporting ? 'Exporting...' : 'CSV'}
+                </span>
+              </button>
+
+              {/* Download All ID Cards Button */}
+              <button
+                onClick={downloadAllIdCards}
+                disabled={isDownloadingCards || !students || students.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDownloadingCards ? (
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium text-blue-700">
+                  {isDownloadingCards 
+                    ? (downloadProgress.total > 0 
+                        ? `${downloadProgress.current}/${downloadProgress.total}` 
+                        : 'Preparing...')
+                    : 'IDs'}
+                </span>
+              </button>
+
               <Link 
                 href="/admin/requests"
                 className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors"
@@ -538,7 +733,7 @@ export default function GlobalStudentsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <span className="text-sm font-medium text-orange-700">
-                  View Requests
+                  Requests
                 </span>
               </Link>
               

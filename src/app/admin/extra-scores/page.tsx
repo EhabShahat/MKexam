@@ -1054,24 +1054,27 @@ export default function ExtraScoresAdminPage() {
                     <p className="text-xs text-gray-500 mt-1">Weight in pass/fail calculation (0.0 - 1.0)</p>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Maximum Points</label>
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      max="1000"
-                      value={configModalField?.max_points == null ? 100 : Number(configModalField?.max_points || 100)}
-                      onChange={(e) => {
-                        if (!configModalField) return;
-                        const updatedField = { ...configModalField, max_points: Number(e.target.value) };
-                        setConfigModalField(updatedField);
-                        setEditFields((prev) => prev.map((x) => x.key === configModalField.key ? updatedField : x));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Maximum possible points for this field</p>
-                  </div>
+                  {/* Hide Maximum Points for system fields (they're always percentages out of 100) */}
+                  {!['exam_type_quiz', 'exam_type_homework', 'attendance_percentage'].includes(configModalField?.key || '') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Maximum Points</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        max="1000"
+                        value={configModalField?.max_points == null ? 100 : Number(configModalField?.max_points || 100)}
+                        onChange={(e) => {
+                          if (!configModalField) return;
+                          const updatedField = { ...configModalField, max_points: Number(e.target.value) };
+                          setConfigModalField(updatedField);
+                          setEditFields((prev) => prev.map((x) => x.key === configModalField.key ? updatedField : x));
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Maximum possible points for this field</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

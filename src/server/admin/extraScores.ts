@@ -196,7 +196,8 @@ export async function extraScoresExamsGET(req: NextRequest) {
       .from("exams")
       .select("id, title, status, exam_type")
       .eq("status", "done")
-      // Show all assessment types: exam, quiz, homework
+      // Only show actual exams, not quizzes or homework (those are auto-calculated into extra fields)
+      .or("exam_type.is.null,exam_type.eq.exam")
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
     if (examsErr) throw examsErr;
@@ -596,12 +597,13 @@ export async function extraScoresExamTagsGET(req: NextRequest) {
       const typeExams = examsByType.get(type) || [];
       const studentScores = (students || []).map(student => {
         let totalScore = 0;
-        let examCount = 0;
+        let attemptedCount = 0;
         
         typeExams.forEach(exam => {
           const studentAttempts = attemptMap.get(student.id);
           const attempt = studentAttempts?.get(exam.id);
           
+          let examScore = 0; // Default to 0 if not attempted
           if (attempt) {
             const results = Array.isArray(attempt.exam_results) ? 
                           attempt.exam_results[0] : attempt.exam_results;
@@ -610,20 +612,24 @@ export async function extraScoresExamTagsGET(req: NextRequest) {
               // Use final score if available, otherwise regular score
               const scorePercentage = results.final_score_percentage ?? results.score_percentage;
               if (scorePercentage != null && !isNaN(Number(scorePercentage))) {
-                totalScore += Number(scorePercentage);
-                examCount += 1;
+                examScore = Number(scorePercentage);
+                attemptedCount += 1;
               }
             }
           }
+          // Always count the exam, even if not attempted (score = 0)
+          totalScore += examScore;
         });
         
-        const averagePercentage = examCount > 0 ? Math.round(totalScore / examCount) : 0;
+        // Calculate average based on ALL exams of this type, not just attempted ones
+        const totalExams = typeExams.length;
+        const averagePercentage = totalExams > 0 ? Math.round(totalScore / totalExams) : 0;
         
         return {
           student_id: student.id,
           code: student.code,
           student_name: student.student_name,
-          exams_attempted: examCount,
+          exams_attempted: attemptedCount,
           total_exams: typeExams.length,
           average_percentage: averagePercentage
         };

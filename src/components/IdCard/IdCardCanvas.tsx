@@ -128,11 +128,11 @@ export default function IdCardCanvas({
           }
         } catch {
           // If photo fails to load, draw placeholder
-          drawPhotoPlaceholder(ctx, photoCenterX, photoCenterY, photoRadius);
+          drawPhotoPlaceholder(ctx, photoCenterX, photoCenterY, photoRadius, fullName);
         }
       } else {
         // No photo URL, draw placeholder
-        drawPhotoPlaceholder(ctx, photoCenterX, photoCenterY, photoRadius);
+        drawPhotoPlaceholder(ctx, photoCenterX, photoCenterY, photoRadius, fullName);
       }
       ctx.restore();
 
@@ -256,7 +256,8 @@ function drawPhotoPlaceholder(
   ctx: CanvasRenderingContext2D,
   centerX: number,
   centerY: number,
-  radius: number
+  radius: number,
+  fullName: string
 ) {
   // Gradient background for placeholder
   const grad = ctx.createLinearGradient(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
@@ -269,20 +270,33 @@ function drawPhotoPlaceholder(
   ctx.fill();
   ctx.closePath();
 
-  // Draw user icon
-  ctx.fillStyle = "#6366f1";
-  ctx.strokeStyle = "#6366f1";
-  ctx.lineWidth = 3;
+  // Extract first letter
+  const firstLetter = (fullName || "").trim().charAt(0).toUpperCase();
+  
+  if (firstLetter) {
+    // Draw the first letter
+    ctx.fillStyle = "#6366f1";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // Scale font size based on radius for better proportions
+    ctx.font = `bold ${radius * 1.2}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan'`;
+    ctx.fillText(firstLetter, centerX, centerY);
+  } else {
+    // Fallback to user icon if no name
+    ctx.fillStyle = "#6366f1";
+    ctx.strokeStyle = "#6366f1";
+    ctx.lineWidth = 3;
 
-  // Head circle
-  const headRadius = radius * 0.25;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY - radius * 0.15, headRadius, 0, Math.PI * 2);
-  ctx.fill();
+    // Head circle
+    const headRadius = radius * 0.25;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY - radius * 0.15, headRadius, 0, Math.PI * 2);
+    ctx.fill();
 
-  // Body (shoulders)
-  ctx.beginPath();
-  ctx.arc(centerX, centerY + radius * 0.6, radius * 0.5, Math.PI, 0, true);
-  ctx.closePath();
-  ctx.fill();
+    // Body (shoulders)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY + radius * 0.6, radius * 0.5, Math.PI, 0, true);
+    ctx.closePath();
+    ctx.fill();
+  }
 }

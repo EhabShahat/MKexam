@@ -9,6 +9,7 @@ export async function examInfoGET(examId: string) {
       .select("id, title, description, access_type, start_time, end_time, duration_minutes, status")
       .eq("id", examId)
       .eq("status", "done")
+      .eq("is_archived", false)
       .single();
 
     if (error || !data) {

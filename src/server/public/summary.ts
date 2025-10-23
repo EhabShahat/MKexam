@@ -87,11 +87,12 @@ export async function summaryGET(request: NextRequest) {
     let examScores: number[] = [];
     let examPassCount = 0;
     let examTotalCount = 0;
-    // Fetch all published exams to ensure missing attempts still contribute as 0
+    // Fetch all published exams to ensure missing attempts still contribute as 0 - exclude archived
     const { data: publishedExams, error: exListErr } = await svc
       .from("exams")
       .select("id, settings")
-      .eq("status", "done");
+      .eq("status", "done")
+      .eq("is_archived", false);
     if (exListErr && (exListErr as any).code !== "PGRST116") {
       return NextResponse.json({ error: (exListErr as any).message }, { status: 400 });
     }

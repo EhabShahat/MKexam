@@ -18,6 +18,10 @@ const appSans = Tajawal({
 export const metadata: Metadata = {
   title: process.env.APP_BRAND_NAME || "Advanced Exam App",
   description: "Secure, flexible exam delivery",
+  icons: {
+    icon: '/icon',
+    apple: '/apple-icon',
+  },
   other: {
     google: 'notranslate',
   },

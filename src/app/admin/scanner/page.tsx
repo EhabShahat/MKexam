@@ -329,11 +329,11 @@ export default function ScannerPage() {
                   toast.info({ message: `Already in queue: ${stu.student_name || stu.code}`, duration: 1000 });
                   return prev;
                 } else {
-                  // Add to queue
+                  // Add to queue (newest first)
                   vibrate();
                   beep();
                   toast.success({ message: `Added to queue: ${stu.student_name || stu.code}`, duration: 1200 });
-                  return [...prev, stu];
+                  return [stu, ...prev];
                 }
               });
             } else {
@@ -352,6 +352,12 @@ export default function ScannerPage() {
         const settings = (track as any)?.getSettings?.() || {};
         const hasTorch = Boolean((caps as any).torch);
         setTorchAvailable(hasTorch);
+        // Explicitly turn off torch when starting
+        if (hasTorch && track) {
+          try {
+            await track.applyConstraints({ advanced: [{ torch: false } as any] } as any);
+          } catch {}
+        }
         setTorchOn(false);
         
         // Display actual camera resolution
@@ -407,7 +413,7 @@ export default function ScannerPage() {
           beep();
           vibrate();
           toast.success({ message: `Added to queue: ${stu.student_name || stu.code}`, duration: 1200 });
-          return [...prev, stu];
+          return [stu, ...prev];
         } else {
           toast.info({ message: `Already in queue: ${stu.student_name || stu.code}`, duration: 1000 });
           return prev;
@@ -587,44 +593,17 @@ export default function ScannerPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 ">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                QR Scanner
-              </h1></div>
-            <div className="flex items-center gap-3">
-              {scanQueue.length > 0 && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-full shadow-lg animate-pulse">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <span className="text-sm font-bold">{scanQueue.length} in Queue</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
-                <div className={`w-2 h-2 rounded-full ${scanning ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
-                <span className="text-sm font-medium text-emerald-700">
-                  {scanning ? 'Scanning Active' : 'Scanner Idle'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="mb-5 gap-6">
+      <div className="max-w-7xl mx-auto px-2 ">
+        <div className="">
           {/* LEFT: Camera */}
           <div className="">
-            <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-gray-200/50 shadow-xl overflow-hidden">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-xl overflow-hidden">
               {/* Camera Header */}
-              <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+              <div className="px-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-800">Camera Scanner</h2>
                   <div className="flex items-center gap-2">
-                    {torchAvailable && (
+                    {torchAvailable && scanning && (
                       <button 
                         onClick={toggleTorch}
                         className={`p-2 rounded-lg transition-all ${torchOn ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -643,22 +622,56 @@ export default function ScannerPage() {
               <div className="relative aspect-video bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
                 <video ref={videoRef} className="w-full h-full object-cover" muted playsInline autoPlay />
                 
+                {/* Floating Start/Stop Button - Compact Icon Style */}
+                {scanning ? (
+                  <div className="absolute bottom-4 left-4 z-10">
+                    <button 
+                      className="w-8 h-8 bg-transparent active:bg-white/10 transition-all active:scale-90 flex items-center justify-center"
+                      onClick={stopScanning}
+                    >
+                      <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 6h12v12H6z"/>
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+                    <button 
+                      className={`w-16 h-16 rounded-full shadow-xl transition-all active:scale-90 flex items-center justify-center ${
+                        cameraSupported 
+                          ? 'bg-emerald-500 active:bg-emerald-700 text-white'
+                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      }`}
+                      onClick={cameraSupported ? startScanning : undefined} 
+                      disabled={!cameraSupported}
+                      title={!cameraSupported ? 'Camera not supported' : 'Start scanning'}
+                    >
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </button>
+                    <span className="text-xs font-medium text-white bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                      {!cameraSupported ? 'Not Available' : 'Tap to Scan'}
+                    </span>
+                  </div>
+                )}
+                
                 {/* Scanning Overlay */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                   <div className="relative">
-                    <div className="w-[30vw] h-[30vw] border-2 border-emerald-400/70 rounded-2xl shadow-[0_0_40px_rgba(16,185,129,0.25)]"></div>
+                    <div className="w-[30vw] md:w-[15vw] h-[30vw] md:h-[15vw] border border-emerald-400/70 rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.25)]"></div>
                     {/* Corner decorations */}
-                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg"></div>
-                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg"></div>
-                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg"></div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-lg"></div>
+                    <div className="absolute -top-0.5 -left-0.5 w-4 h-4 md:w-3 md:h-3 border-t-2 border-l-2 border-emerald-400 rounded-tl-md"></div>
+                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 md:w-3 md:h-3 border-t-2 border-r-2 border-emerald-400 rounded-tr-md"></div>
+                    <div className="absolute -bottom-0.5 -left-0.5 w-4 h-4 md:w-3 md:h-3 border-b-2 border-l-2 border-emerald-400 rounded-bl-md"></div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 md:w-3 md:h-3 border-b-2 border-r-2 border-emerald-400 rounded-br-md"></div>
                   </div>
                 </div>
 
                 {/* Scanning Animation */}
                 {scanning && (
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-64 h-64 relative">
+                    <div className="w-[60vw] md:w-64 h-[60vw] md:h-64 relative">
                       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse"></div>
                       <div className="absolute top-4 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent animate-pulse" style={{animationDelay: '0.5s'}}></div>
                     </div>
@@ -667,46 +680,6 @@ export default function ScannerPage() {
 
               </div>
 
-              {/* Control Button - Always visible */}
-              <div className="p-4 bg-gray-50 border-t border-gray-200">
-                <div className="flex flex-col items-center justify-center gap-3">
-                  {scanning ? (
-                    <button 
-                      className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2"
-                      onClick={stopScanning}
-                    >
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      Stop Scanning
-                    </button>
-                  ) : (
-                    <button 
-                      className={`px-6 py-3 font-semibold rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center gap-2 ${
-                        cameraSupported 
-                          ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
-                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                      }`}
-                      onClick={cameraSupported ? startScanning : undefined} 
-                      disabled={!cameraSupported}
-                      title={!cameraSupported ? 'Camera not supported - use search to select students manually' : ''}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12h-.01M12 12v4h1m1 0h.01" />
-                      </svg>
-                      {!cameraSupported ? 'Camera Not Supported' : (selectedStudent && pauseOnScan ? 'Resume Scanning' : 'Start Scanning')}
-                    </button>
-                  )}
-                  
-                  {/* Camera Resolution Info */}
-                  {scanning && cameraResolution && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      <span className="text-xs font-medium text-blue-700">{cameraResolution}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
               {scanError && (
                 <div className="p-4 bg-red-50 border-t border-red-200 flex items-center gap-3">
                   <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -722,9 +695,10 @@ export default function ScannerPage() {
           </div>
 
           {/* RIGHT: Details & Actions */}
-          <div className="mt-5 space-y-4">
-            {/* Search */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-4">
+          <div className="mt-2 space-y-2">
+            {/* Search - Hidden when scanner is active */}
+            {!scanning && (
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-lg p-3">
               <div className="flex items-center gap-3 mb-3">
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -763,7 +737,7 @@ export default function ScannerPage() {
                             beep();
                             vibrate();
                             toast.success({ message: `Added to queue: ${s.student_name || s.code}`, duration: 1000 });
-                            return [...prev, s];
+                            return [s, ...prev];
                           } else {
                             toast.info({ message: `Already in queue: ${s.student_name || s.code}`, duration: 1000 });
                             return prev;
@@ -800,11 +774,12 @@ export default function ScannerPage() {
                 </div>
               )}
             </div>
+            )}
 
           {/* Scan Queue */}
           {scanQueue.length > 0 && (
-            <div className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-300 rounded-2xl shadow-lg overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-600 to-green-600 p-4">
+            <div className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-300 rounded-xl shadow-lg overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-600 to-green-600 p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
@@ -832,7 +807,7 @@ export default function ScannerPage() {
               </div>
               
               {/* Queue List */}
-              <div className="p-4 max-h-96 overflow-y-auto space-y-2">
+              <div className="p-2 max-h-96 overflow-y-auto space-y-2">
                 {scanQueue.map((student, index) => (
                   <div 
                     key={student.student_id} 
@@ -840,7 +815,7 @@ export default function ScannerPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 font-bold text-sm">
-                        {index + 1}
+                        {scanQueue.length - index}
                       </div>
                       <div>
                         <div className="font-semibold text-gray-900">{student.student_name || 'Unknown'}</div>
@@ -861,7 +836,7 @@ export default function ScannerPage() {
               </div>
               
               {/* Record All Button */}
-              <div className="p-4 bg-white border-t-2 border-emerald-200">
+              <div className="p-3 bg-white border-t-2 border-emerald-200">
                 <button
                   onClick={() => batchRecordMutation.mutate(scanQueue)}
                   disabled={batchRecordMutation.isPending}
@@ -887,9 +862,9 @@ export default function ScannerPage() {
 
           {/* Selected student card */}
           {selectedStudent && (
-            <div className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+            <div className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow-lg overflow-hidden">
               {/* Header with student info */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 text-white">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -909,7 +884,7 @@ export default function ScannerPage() {
               </div>
 
               {/* Content */}
-              <div className="p-4 space-y-4">
+              <div className="p-3 space-y-3">
                 {/* Student Details */}
                 <div className="grid grid-cols-1 gap-3">
                   {selectedStudent.mobile_number && (
@@ -1024,8 +999,8 @@ export default function ScannerPage() {
           )}
 
             {/* Recent Scans */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg">
-              <div className="px-4 py-3 border-b border-gray-100">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200/50 shadow-lg">
+              <div className="px-3 py-2 border-b border-gray-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
