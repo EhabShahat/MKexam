@@ -47,15 +47,7 @@ interface PublicSettings {
   enable_code_search?: boolean;
 }
 
-export default function PublicResultsPage({
-  initialSystemMode,
-  initialDisabledMessage,
-  skipModeFetch = !!initialSystemMode,
-}: {
-  initialSystemMode?: 'exam' | 'results' | 'disabled';
-  initialDisabledMessage?: string | null;
-  skipModeFetch?: boolean;
-}) {
+export default function PublicResultsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [effectiveMode, setEffectiveMode] = useState<"name" | "code">("name");
   const [settings, setSettings] = useState<PublicSettings>({});
@@ -64,8 +56,8 @@ export default function PublicResultsPage({
 
 
   const router = useRouter();
-  const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(initialSystemMode ?? null);
-  const [disabledMessage, setDisabledMessage] = useState<string | null>(initialDisabledMessage ?? null);
+  const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(null);
+  const [disabledMessage, setDisabledMessage] = useState<string | null>(null);
   const { locale, dir } = useStudentLocale();
 
   // Fetch app settings
@@ -156,7 +148,6 @@ export default function PublicResultsPage({
 
   // Fetch system mode & disabled message
   useEffect(() => {
-    if (skipModeFetch) return; // SSR provided system mode; avoid re-fetch
     let cancelled = false;
     (async () => {
       try {
@@ -173,7 +164,7 @@ export default function PublicResultsPage({
       }
     })();
     return () => { cancelled = true; };
-  }, [skipModeFetch]);
+  }, []);
 
   // Note: Results page can be accessed independently via toggle control in admin
   // No automatic redirect based on system mode (except 'disabled' which is handled in render)
