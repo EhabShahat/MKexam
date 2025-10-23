@@ -88,8 +88,13 @@ export default function AdminResultsIndex() {
     (examsQuery.data ?? []).filter((e) => e.status === "published" || e.status === "done"),
   [examsQuery.data]);
 
+  // Filter to show only actual exams (not quiz/homework) for All Exams view
+  const visibleActualExams = useMemo(() =>
+    visibleExams.filter((e) => !e.exam_type || e.exam_type === 'exam'),
+  [visibleExams]);
+
   const handleExportAllCsv = async () => {
-    const exams = visibleExams;
+    const exams = visibleActualExams;
     const fields = visibleExtraFields;
     const rows = filteredAllRows as Array<{ name: string; code: string | null; scores: Record<string, number | null>; summary?: { overall_score: number | null } }>;
     
@@ -137,7 +142,7 @@ export default function AdminResultsIndex() {
 
   const handleExportAllXlsx = async () => {
     const XLSX = await import("xlsx");
-    const exams = visibleExams;
+    const exams = visibleActualExams;
     const fields = visibleExtraFields;
     const rows = filteredAllRows as Array<{ name: string; code: string | null; scores: Record<string, number | null>; summary?: { overall_score: number | null } }>;
     const out = rows.map((r) => {
@@ -165,19 +170,23 @@ export default function AdminResultsIndex() {
 
   // Aggregated attempts across all exams when Select All is chosen
   const allAttemptsQuery = useQuery({
-    enabled: examId === ALL && (visibleExams.length || 0) > 0,
+    enabled: examId === ALL,
     queryKey: ["admin", "attempts", "ALL"],
     queryFn: async () => {
-      const exams = visibleExams ?? [];
+      const exams = visibleActualExams ?? [];
       const resultsByExam: Record<string, any[]> = {};
-      await Promise.all(
-        exams.map(async (ex) => {
-          const res = await authFetch(`/api/admin/exams/${ex.id}/attempts`);
-          const j = await res.json();
-          if (res.ok) resultsByExam[ex.id] = (j.items as any[]) || [];
-          else resultsByExam[ex.id] = [];
-        })
-      );
+      
+      // Fetch exam attempts if there are any actual exams
+      if (exams.length > 0) {
+        await Promise.all(
+          exams.map(async (ex) => {
+            const res = await authFetch(`/api/admin/exams/${ex.id}/attempts`);
+            const j = await res.json();
+            if (res.ok) resultsByExam[ex.id] = (j.items as any[]) || [];
+            else resultsByExam[ex.id] = [];
+          })
+        );
+      }
       // Also fetch master students list to map codes and ids
       let nameToCode: Map<string, string> = new Map();
       let codeToId: Map<string, string> = new Map();
@@ -198,46 +207,66 @@ export default function AdminResultsIndex() {
       } catch {}
       // Build per-student aggregation by student_name
       const byStudent: Map<string, { name: string; code: string | null; student_id: string | null; scores: Record<string, number | null> }> = new Map();
-      for (const ex of exams) {
-        const items = resultsByExam[ex.id] || [];
-        const bestByName: Map<string, number> = new Map();
-        const codeByName: Map<string, string | null> = new Map();
-        const idByName: Map<string, string | null> = new Map();
-        for (const at of items) {
-          const name = (at.student_name ?? "").trim() || "(Anonymous)";
-          const val = at.final_score_percentage ?? at.score_percentage;
-          const n = val == null ? null : Number(val);
-          if (n == null || Number.isNaN(n)) continue;
-          const prev = bestByName.get(name);
-          if (prev == null || n > prev) bestByName.set(name, n);
-          const existingCode = codeByName.get(name);
-          if (!existingCode && at.code) codeByName.set(name, at.code);
-          else if (!codeByName.has(name)) codeByName.set(name, at.code ?? (nameToCode.get(name) ?? null));
-          // set id by code or name
-          if (!idByName.has(name)) {
-            const code = at.code ?? (nameToCode.get(name) ?? null);
-            const sid = code ? (codeToId.get(code) ?? null) : (nameToId.get(name) ?? null);
-            idByName.set(name, sid ?? null);
+      
+      // If there are no actual exams, create rows for all students from master list
+      if (exams.length === 0) {
+        try {
+          const sRes = await authFetch(`/api/admin/students`);
+          const sJson = await sRes.json();
+          if (sRes.ok && Array.isArray(sJson?.students)) {
+            for (const s of sJson.students) {
+              const nm = (String(s?.student_name ?? "").trim()) || "";
+              const cd = s?.code ? String(s.code) : null;
+              const sid = s?.student_id ? String(s.student_id) : null;
+              if (nm) {
+                byStudent.set(nm, { name: nm, code: cd, student_id: sid, scores: {} });
+              }
+            }
           }
-        }
-        // Merge into rows
-        for (const [name, val] of bestByName.entries()) {
-          const row = byStudent.get(name) || { name, code: codeByName.get(name) ?? (nameToCode.get(name) ?? null), student_id: idByName.get(name) ?? null, scores: {} };
-          if (row.code == null) row.code = codeByName.get(name) ?? (nameToCode.get(name) ?? null);
-          if (row.student_id == null) row.student_id = idByName.get(name) ?? null;
-          row.scores[ex.id] = val;
-          byStudent.set(name, row);
-        }
-        // Ensure students with attempts but null score appear
-        for (const at of items) {
-          const name = (at.student_name ?? "").trim() || "(Anonymous)";
-          if (!byStudent.has(name)) byStudent.set(name, { name, code: at.code ?? (nameToCode.get(name) ?? null), student_id: (at.code ? (codeToId.get(at.code) ?? null) : (nameToId.get(name) ?? null)), scores: { [ex.id]: null } });
-          else {
-            const existing = byStudent.get(name)!;
-            if (existing.scores[ex.id] === undefined) existing.scores[ex.id] = null;
-            if (!existing.code) existing.code = at.code ?? (nameToCode.get(name) ?? null);
-            if (!existing.student_id) existing.student_id = (existing.code ? (codeToId.get(existing.code) ?? null) : (nameToId.get(name) ?? null));
-            byStudent.set(name, existing);
+        } catch {}
+      } else {
+        // Normal aggregation when there are actual exams
+        for (const ex of exams) {
+          const items = resultsByExam[ex.id] || [];
+          const bestByName: Map<string, number> = new Map();
+          const codeByName: Map<string, string | null> = new Map();
+          const idByName: Map<string, string | null> = new Map();
+          for (const at of items) {
+            const name = (at.student_name ?? "").trim() || "(Anonymous)";
+            const val = at.final_score_percentage ?? at.score_percentage;
+            const n = val == null ? null : Number(val);
+            if (n == null || Number.isNaN(n)) continue;
+            const prev = bestByName.get(name);
+            if (prev == null || n > prev) bestByName.set(name, n);
+            const existingCode = codeByName.get(name);
+            if (!existingCode && at.code) codeByName.set(name, at.code);
+            else if (!codeByName.has(name)) codeByName.set(name, at.code ?? (nameToCode.get(name) ?? null));
+            // set id by code or name
+            if (!idByName.has(name)) {
+              const code = at.code ?? (nameToCode.get(name) ?? null);
+              const sid = code ? (codeToId.get(code) ?? null) : (nameToId.get(name) ?? null);
+              idByName.set(name, sid ?? null);
+            }
+          }
+          // Merge into rows
+          for (const [name, val] of bestByName.entries()) {
+            const row = byStudent.get(name) || { name, code: codeByName.get(name) ?? (nameToCode.get(name) ?? null), student_id: idByName.get(name) ?? null, scores: {} };
+            if (row.code == null) row.code = codeByName.get(name) ?? (nameToCode.get(name) ?? null);
+            if (row.student_id == null) row.student_id = idByName.get(name) ?? null;
+            row.scores[ex.id] = val;
+            byStudent.set(name, row);
+          }
+          // Ensure students with attempts but null score appear
+          for (const at of items) {
+            const name = (at.student_name ?? "").trim() || "(Anonymous)";
+            if (!byStudent.has(name)) byStudent.set(name, { name, code: at.code ?? (nameToCode.get(name) ?? null), student_id: (at.code ? (codeToId.get(at.code) ?? null) : (nameToId.get(name) ?? null)), scores: { [ex.id]: null } });
+            else {
+              const existing = byStudent.get(name)!;
+              if (existing.scores[ex.id] === undefined) existing.scores[ex.id] = null;
+              if (!existing.code) existing.code = at.code ?? (nameToCode.get(name) ?? null);
+              if (!existing.student_id) existing.student_id = (existing.code ? (codeToId.get(existing.code) ?? null) : (nameToId.get(name) ?? null));
+              byStudent.set(name, existing);
+            }
           }
         }
       }
@@ -467,9 +496,9 @@ export default function AdminResultsIndex() {
     },
   });
 
-  // Build columns for ALL view: Student + each visible exam + extra fields (not hidden) + Final
+  // Build columns for ALL view: Student + each visible exam (only actual exams) + extra fields (not hidden) + Final
   const columnsAll = useMemo(() => {
-    const exams = visibleExams;
+    const exams = visibleActualExams;
     const extraCols = (extraFieldsQuery.data || []).filter((f) => !f.hidden).map((f) => ({ key: `extra_${f.key}`, label: f.label, align: "center" as const }));
     return [
       { key: "student", label: "Student", width: "15vw" },
@@ -487,7 +516,7 @@ export default function AdminResultsIndex() {
       ...extraCols,
       { key: "final", label: "Final", align: "center" as const },
     ];
-  }, [visibleExams, extraFieldsQuery.data]);
+  }, [visibleActualExams, extraFieldsQuery.data]);
 
   // Load summaries (extras + overall) for students present in aggregated ALL rows using existing public API
   const codesForAll = useMemo(() => {
