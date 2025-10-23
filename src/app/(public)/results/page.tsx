@@ -55,7 +55,7 @@ export default function PublicResultsPage({
   initialSystemMode?: 'exam' | 'results' | 'disabled';
   initialDisabledMessage?: string | null;
   skipModeFetch?: boolean;
-} = {}) {
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [effectiveMode, setEffectiveMode] = useState<"name" | "code">("name");
   const [settings, setSettings] = useState<PublicSettings>({});
