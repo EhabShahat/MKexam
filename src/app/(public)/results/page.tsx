@@ -34,10 +34,16 @@ interface PassSummary {
   hidden?: boolean;
 }
 
+interface StudentInfo {
+  student_name: string;
+  student_code: string;
+}
+
 interface ResultsResponse {
   items: ExamResult[];
   extras: ExtraField[];
   pass_summary: PassSummary | null;
+  student_info?: StudentInfo;
 }
 
 interface PublicSettings {
@@ -59,6 +65,7 @@ export default function PublicResultsPage() {
   const [systemMode, setSystemMode] = useState<'exam' | 'results' | 'disabled' | null>(null);
   const [disabledMessage, setDisabledMessage] = useState<string | null>(null);
   const { locale, dir } = useStudentLocale();
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Fetch app settings
   const settingsQuery = useQuery<PublicSettings, Error>({
@@ -104,7 +111,7 @@ export default function PublicResultsPage() {
 
   // Fetch filtered exam results from server only when user enters a term
   const resultsQuery = useQuery<ResultsResponse, Error>({
-    enabled: systemMode !== null && systemMode !== 'disabled' && canSearch,
+    enabled: false,
     queryKey: ["public", "results", searchTerm, effectiveMode],
     queryFn: async () => {
       try {
@@ -119,6 +126,7 @@ export default function PublicResultsPage() {
           items: (data.items as ExamResult[]) || [],
           extras: (data.extras as ExtraField[]) || [],
           pass_summary: (data.pass_summary as PassSummary) || null,
+          student_info: (data.student_info as StudentInfo) || undefined,
         };
       } catch (error) {
         console.error("Results fetch error:", error);
@@ -166,6 +174,11 @@ export default function PublicResultsPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Derive display name/code from data
+  const displayName = resultsQuery.data?.student_info?.student_name || resultsQuery.data?.items?.[0]?.student_name || '';
+  const displayCode = resultsQuery.data?.student_info?.student_code || resultsQuery.data?.items?.[0]?.student_code || '';
+  const showHeader = !!resultsQuery.data; 
+
   // Note: Results page can be accessed independently via toggle control in admin
   // No automatic redirect based on system mode (except 'disabled' which is handled in render)
 
@@ -176,6 +189,11 @@ export default function PublicResultsPage() {
       setTimeout(() => { try { resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { try { (resultsRef.current as any)?.scrollIntoView?.(true); } catch {} } }, 50);
     }
   }, [systemMode, resultsQuery.data]);
+
+  // When results arrive, switch UI to name card
+  useEffect(() => {
+    if (resultsQuery.data) setHasSearched(true);
+  }, [resultsQuery.data]);
 
   // Tri-state UI rendering
   if (systemMode === null) {
@@ -215,74 +233,92 @@ export default function PublicResultsPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          {isCodeMode ? (
-            <div className="space-y-3">
-              <label htmlFor="results-code" className="block text-sm font-semibold text-gray-700">{t(locale, "exam_code")}</label>
-              <div className="relative">
-                <input
-                  id="results-code"
-                  type="text"
-                  inputMode="numeric"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                    setSearchTerm(v);
-                  }}
-                  className="w-full px-4 py-4 text-center text-2xl font-mono tracking-[0.5em] border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder="0000"
-                  maxLength={4}
-                  autoComplete="one-time-code"
-                />
-                <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'left-4' : 'right-4'} flex items-center pointer-events-none`}>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2h-6m6 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9a2 2 0 012-2h6z" />
-                  </svg>
-                </div>
+          {showHeader ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-12 h-12 bg-blue-600 text-white rounded-full font-bold text-lg">
+                {(displayName || "-").charAt(0).toUpperCase()}
               </div>
-              <p className="text-xs text-gray-500 text-center">{t(locale, "exam_code_hint")}</p>
-              <div className="min-h-[18px] text-xs text-center">
-                {!searchTerm.trim() ? (
-                  <span className="text-gray-500">&nbsp;</span>
-                ) : !is4Digits ? (
-                  <span className="text-yellow-700">{t(locale, "code_must_be_4_digits")}</span>
-                ) : codeValidationQuery.isFetching ? (
-                  <span className="text-blue-700">{t(locale, "checking_code")}</span>
-                ) : codeValidationQuery.data === true ? (
-                  <span className="text-green-700">{t(locale, "code_verified")}</span>
-                ) : (
-                  <span className="text-red-700">{t(locale, "code_not_found")}</span>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{displayName || '-'}</h3>
+                {displayCode && (
+                  <p className="text-sm text-gray-600">{t(locale, 'exam_code')}: <span className="font-mono font-semibold">{displayCode}</span></p>
                 )}
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <label htmlFor="results-name" className="block text-sm font-semibold text-gray-700">{t(locale, "student_name")}</label>
-              <div className="relative">
-                <input
-                  id="results-name"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 bg-gray-50 focus:bg-white"
-                  placeholder={t(locale, "name_placeholder")}
-                  autoComplete="name"
-                />
-                <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'left-4' : 'right-4'} flex items-center pointer-events-none`}>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+            <>
+              {isCodeMode ? (
+                <div className="space-y-3">
+                  <label htmlFor="results-code" className="block text-sm font-semibold text-gray-700">{t(locale, "exam_code")}</label>
+                  <div className="relative">
+                    <input
+                      id="results-code"
+                      type="text"
+                      inputMode="numeric"
+                      value={searchTerm}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setSearchTerm(v);
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && canSearch) { resultsQuery.refetch(); setHasSearched(true); } }}
+                      className="w-full px-4 py-4 text-center text-2xl font-mono tracking-[0.5em] border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 bg-gray-50 focus:bg-white"
+                      placeholder="0000"
+                      maxLength={4}
+                      autoComplete="one-time-code"
+                    />
+                    <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'left-4' : 'right-4'} flex items-center pointer-events-none`}>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2h-6m6 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9a2 2 0 012-2h6z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 text-center">{t(locale, "exam_code_hint")}</p>
+                  <div className="min-h-[18px] text-xs text-center">
+                    {!searchTerm.trim() ? (
+                      <span className="text-gray-500">&nbsp;</span>
+                    ) : !is4Digits ? (
+                      <span className="text-yellow-700">{t(locale, "code_must_be_4_digits")}</span>
+                    ) : codeValidationQuery.isFetching ? (
+                      <span className="text-blue-700">{t(locale, "checking_code")}</span>
+                    ) : codeValidationQuery.data === true ? (
+                      <span className="text-green-700">{t(locale, "code_verified")}</span>
+                    ) : (
+                      <span className="text-red-700">{t(locale, "code_not_found")}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              ) : (
+                <div className="space-y-3">
+                  <label htmlFor="results-name" className="block text-sm font-semibold text-gray-700">{t(locale, "student_name")}</label>
+                  <div className="relative">
+                    <input
+                      id="results-name"
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && canSearch) { resultsQuery.refetch(); setHasSearched(true); } }}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all duration-200 bg-gray-50 focus:bg-white"
+                      placeholder={t(locale, "name_placeholder")}
+                      autoComplete="name"
+                    />
+                    <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'left-4' : 'right-4'} flex items-center pointer-events-none`}>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          <button
-            className="mt-6 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg"
-            onClick={() => { if (canSearch) resultsQuery.refetch(); }}
-            disabled={!canSearch || resultsQuery.isFetching}
-          >
-            {resultsQuery.isFetching ? t(locale, 'searching') : (isCodeMode ? t(locale, 'find_results') : t(locale, 'search_results'))}
-          </button>
+              <button
+                className="mt-6 w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg"
+                onClick={async () => { if (canSearch) { const r = await resultsQuery.refetch(); if (!r.error) setHasSearched(true); } }}
+                disabled={!canSearch || resultsQuery.isFetching}
+              >
+                {resultsQuery.isFetching ? t(locale, 'searching') : (isCodeMode ? t(locale, 'find_results') : t(locale, 'search_results'))}
+              </button>
+            </>
+          )}
         </div>
 
         <div
@@ -306,6 +342,7 @@ export default function PublicResultsPage() {
               <div className="text-center text-gray-600 py-4">{t(locale, 'no_results_found')}</div>
             ) : (
               <div className="space-y-6">
+
                 {/* Exam Results List */}
                 {resultsQuery.data?.items && resultsQuery.data.items.length > 0 && (
                   <div>
@@ -399,8 +436,8 @@ export default function PublicResultsPage() {
                   }`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-1">Overall Result</h3>
-                        <p className="text-sm text-gray-600">Final calculated score</p>
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">{t(locale, 'overall_result')}</h3>
+                        <p className="text-sm text-gray-600">{t(locale, 'final_calculated_score')}</p>
                       </div>
                       <div className="text-right">
                         <div className={`text-4xl font-bold mb-2 ${
@@ -433,6 +470,16 @@ export default function PublicResultsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Back button */}
+                <div className="pt-2">
+                  <button
+                    className="w-full md:w-auto px-5 py-3 rounded-lg border border-gray-300 text-gray-800 hover:bg-gray-50"
+                    onClick={() => { setHasSearched(false); setShowResults(false); setSearchTerm(""); }}
+                  >
+                    {t(locale, 'go_back')}
+                  </button>
+                </div>
               </div>
             )}
           </div>

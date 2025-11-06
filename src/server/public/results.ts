@@ -86,11 +86,12 @@ export async function resultsGET(request: NextRequest) {
       extraScoresData = (extraRes?.data || {}) as Record<string, any>;
     }
 
-    // Load all exams with their config (only actual exams, not quizzes/homework which are in extra fields)
+    // Load all DONE exams with their config (only actual exams, not quizzes/homework which are in extra fields)
     const { data: examsRes } = await svc
       .from("exams")
-      .select("id, title, settings, exam_type")
+      .select("id, title, settings, exam_type, status")
       .or("exam_type.is.null,exam_type.eq.exam")
+      .eq("status", "done")
       .order("created_at", { ascending: true });
     const allExams = (examsRes || []) as any[];
     const examIds = allExams.map((e) => e.id);
@@ -134,6 +135,8 @@ export async function resultsGET(request: NextRequest) {
     let examPassCount = 0;
     let examTotalCount = 0;
 
+    console.log(`[Results API] Total DONE exams: ${allExams.length}, Student attempts: ${attemptsByExam.size}`);
+
     for (const exam of allExams) {
       const cfg = configMap.get(exam.id) || {};
       if (cfg.hidden === true) continue; // Skip hidden exams
@@ -144,17 +147,30 @@ export async function resultsGET(request: NextRequest) {
       let completion_status: string | null = null;
 
       if (attempt) {
+        completion_status = attempt.completion_status ?? null;
+        console.log(`[Results API] Exam "${exam.title}": attempt status=${completion_status}`);
+
+        // If student finished the attempt, use their score; otherwise treat as zero
         const er = Array.isArray(attempt.exam_results) ? attempt.exam_results[0] : attempt.exam_results;
-        if (examScoreSource === "final") {
-          const f = er?.final_score_percentage;
-          if (f != null && !Number.isNaN(Number(f))) scoreValue = Number(f);
-          else if (er?.score_percentage != null && !Number.isNaN(Number(er.score_percentage))) scoreValue = Number(er.score_percentage);
+        if (completion_status === 'submitted') {
+          if (examScoreSource === "final") {
+            const f = er?.final_score_percentage;
+            if (f != null && !Number.isNaN(Number(f))) scoreValue = Number(f);
+            else if (er?.score_percentage != null && !Number.isNaN(Number(er.score_percentage))) scoreValue = Number(er.score_percentage);
+          } else {
+            const raw = er?.score_percentage;
+            if (raw != null && !Number.isNaN(Number(raw))) scoreValue = Number(raw);
+          }
         } else {
-          const raw = er?.score_percentage;
-          if (raw != null && !Number.isNaN(Number(raw))) scoreValue = Number(raw);
+          scoreValue = 0; // Not completed -> treat as zero
         }
         submitted_at = attempt.submitted_at ?? null;
-        completion_status = attempt.completion_status ?? null;
+      } else {
+        // No attempt -> zero score
+        console.log(`[Results API] Exam "${exam.title}": no attempt -> 0%`);
+        scoreValue = 0;
+        completion_status = 'absent';
+        submitted_at = null;
       }
 
       const passThresholdRaw = exam?.settings?.pass_percentage;
@@ -271,6 +287,8 @@ export async function resultsGET(request: NextRequest) {
       return bs - as;
     });
 
+    console.log(`[Results API] Returning ${examItems.length} exam items for student ${student.student_name} (${student.code})`);
+
     return NextResponse.json({
       items: examItems,
       extras,
@@ -278,6 +296,10 @@ export async function resultsGET(request: NextRequest) {
         overall_score: overallScore != null ? Math.round(overallScore * 100) / 100 : null,
         passed,
         hidden: hidePassFailMessages,
+      },
+      student_info: {
+        student_name: student.student_name || "Anonymous",
+        student_code: student.code || "",
       },
     });
   } catch (error) {
