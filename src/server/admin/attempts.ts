@@ -210,7 +210,7 @@ export async function attemptsIdStateGET(req: NextRequest, attemptId: string) {
         const manualMap = manual.reduce((acc: any, row: any) => {
           acc[row.question_id] = { awarded_points: row.awarded_points, notes: row.notes, graded_at: row.graded_at };
           return acc;
-          }, {} as Record<string, { awarded_points: number; notes?: string | null; graded_at?: string }>);
+        }, {} as Record<string, { awarded_points: number; notes?: string | null; graded_at?: string }>);
 
         const enriched = { ...(state ?? {}), questions: adminQuestions, manual_grades: manual, manual_grades_map: manualMap } as any;
         return NextResponse.json(enriched);
@@ -279,6 +279,29 @@ export async function attemptsIdRegradePOST(req: NextRequest, attemptId: string)
     await auditLog((admin as any).user_id, "regrade_attempt", { attempt_id: attemptId });
     const row = Array.isArray(data) ? (data as any[])[0] : data;
     return NextResponse.json({ ok: true, result: row });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+// GET /api/admin/device-fingerprint/:hash
+export async function attemptsByFingerprintGET(req: NextRequest, hash: string) {
+  try {
+    await requireAdmin(req);
+    const supabase = supabaseServer();
+
+    // Query for attempts where device_info->>'fingerprint' matches the hash
+    const { data, error } = await supabase
+      .from("exam_attempts")
+      .select("id, student_name, started_at, completion_status, exam_id, exams(title)")
+      .eq("device_info->>fingerprint", hash)
+      .order("started_at", { ascending: false })
+      .limit(50);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    return NextResponse.json({ items: data || [] });
   } catch (e: any) {
     if (e instanceof Response) return e;
     return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });

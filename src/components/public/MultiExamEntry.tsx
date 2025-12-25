@@ -6,6 +6,7 @@ import BrandLogo from "@/components/BrandLogo";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
 import type { CodeFormatSettings } from "@/lib/codeGenerator";
+import { collectDetailedDeviceInfo } from "@/lib/collectDeviceInfo";
 
 interface ByCodeExamItem {
   id: string;
@@ -67,12 +68,12 @@ export default function MultiExamEntry() {
   // Helper function to validate code format
   const isValidCode = (code: string): boolean => {
     if (!codeSettings || !code) return false;
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
 
     if (code_format === "custom" && code_pattern) {
       if (code.length !== code_pattern.length) return false;
-      
+
       for (let i = 0; i < code_pattern.length; i++) {
         const patternChar = code_pattern[i];
         const codeChar = code[i];
@@ -111,13 +112,13 @@ export default function MultiExamEntry() {
   // Helper functions for input field
   const getPlaceholder = (): string => {
     if (!codeSettings) return "0000";
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
-    
+
     if (code_format === "custom" && code_pattern) {
       return code_pattern.replace(/N/g, "0").replace(/A/g, "A").replace(/#/g, "0");
     }
-    
+
     switch (code_format) {
       case "numeric":
         return "0".repeat(code_length);
@@ -132,13 +133,13 @@ export default function MultiExamEntry() {
 
   const getMaxLength = (): number => {
     if (!codeSettings) return 4;
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
-    
+
     if (code_format === "custom" && code_pattern) {
       return code_pattern.length;
     }
-    
+
     return code_length;
   };
 
@@ -162,7 +163,7 @@ export default function MultiExamEntry() {
     const onVisibility = () => {
       try {
         if (document.visibilityState === "visible") refetchIfCode();
-      } catch {}
+      } catch { }
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -192,7 +193,7 @@ export default function MultiExamEntry() {
       const data = await res.json();
       const items: ByCodeExamItem[] = data?.exams || [];
       setStudentName(data?.student_name || null);
-      
+
       // In single exam mode, auto-start or continue without showing the list
       if (!isMultiExamMode) {
         // Prefer continuing an in-progress attempt
@@ -210,7 +211,7 @@ export default function MultiExamEntry() {
           return;
         }
       }
-      
+
       setExams(items);
     } catch {
       setError(t(locale, "error_loading_results"));
@@ -226,10 +227,11 @@ export default function MultiExamEntry() {
     setStartingExamId(examId);
     setError(null);
     try {
+      const deviceInfo = await collectDetailedDeviceInfo();
       const res = await fetch(`/api/public/exams/${examId}/access`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: c, studentName: null }),
+        body: JSON.stringify({ code: c, studentName: null, deviceInfo }),
       });
       const data = await res.json();
       if (!res.ok) {

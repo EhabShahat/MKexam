@@ -7,6 +7,7 @@ import BrandLogo from "@/components/BrandLogo";
 import { useStudentLocale } from "@/components/public/PublicLocaleProvider";
 import { t } from "@/i18n/student";
 import type { CodeFormatSettings } from "@/lib/codeGenerator";
+import { collectDetailedDeviceInfo } from "@/lib/collectDeviceInfo";
 
 interface ExamInfo {
   id: string;
@@ -126,12 +127,12 @@ export default function ExamEntry({
   // Helper function to validate code format
   const isValidCode = (code: string): boolean => {
     if (!codeSettings || !code) return false;
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
 
     if (code_format === "custom" && code_pattern) {
       if (code.length !== code_pattern.length) return false;
-      
+
       for (let i = 0; i < code_pattern.length; i++) {
         const patternChar = code_pattern[i];
         const codeChar = code[i];
@@ -170,13 +171,13 @@ export default function ExamEntry({
   // Helper functions for input field
   const getPlaceholder = (): string => {
     if (!codeSettings) return "0000";
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
-    
+
     if (code_format === "custom" && code_pattern) {
       return code_pattern.replace(/N/g, "0").replace(/A/g, "A").replace(/#/g, "0");
     }
-    
+
     switch (code_format) {
       case "numeric":
         return "0".repeat(code_length);
@@ -191,13 +192,13 @@ export default function ExamEntry({
 
   const getMaxLength = (): number => {
     if (!codeSettings) return 4;
-    
+
     const { code_length, code_format, code_pattern } = codeSettings;
-    
+
     if (code_format === "custom" && code_pattern) {
       return code_pattern.length;
     }
-    
+
     return code_length;
   };
 
@@ -208,286 +209,7 @@ export default function ExamEntry({
       setLoading(true);
       setError(null);
 
-      async function collectDeviceInfo() {
-        try {
-          const nav = typeof navigator !== "undefined" ? (navigator as any) : ({} as any);
-          const scr = typeof screen !== "undefined" ? (screen as any) : ({} as any);
-          const win = typeof window !== "undefined" ? (window as any) : ({} as any);
-
-          const tz = (() => {
-            try {
-              return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
-            } catch {
-              return null;
-            }
-          })();
-
-          // User-Agent Client Hints (Chromium)
-          const uaData = nav.userAgentData ? {
-            platform: nav.userAgentData.platform ?? null,
-            mobile: typeof nav.userAgentData.mobile === "boolean" ? nav.userAgentData.mobile : null,
-            brands: Array.isArray(nav.userAgentData.brands) ? nav.userAgentData.brands : null,
-          } : null;
-
-          // High-entropy UA-CH values (may provide device model on Android Chrome)
-          let uaHigh: any = null;
-          try {
-            if (nav.userAgentData && typeof nav.userAgentData.getHighEntropyValues === "function") {
-              uaHigh = await nav.userAgentData.getHighEntropyValues([
-                "model",
-                "platformVersion",
-                "uaFullVersion",
-              ]);
-            }
-          } catch {}
-
-          const ua: string = typeof nav.userAgent === "string" ? nav.userAgent : "";
-
-          function parseUA(uaStr: string) {
-            try {
-              const b: any = { name: null, version: null };
-              const o: any = { name: null, version: null };
-              const d: any = { type: null };
-
-              // Browser
-              const mEdge = uaStr.match(/Edg\/(\d+\.?\d*)/);
-              const mOpera = uaStr.match(/OPR\/(\d+\.?\d*)/);
-              const mChrome = uaStr.match(/Chrome\/(\d+\.?\d*)/);
-              const mFirefox = uaStr.match(/Firefox\/(\d+\.?\d*)/);
-              const mSafariV = uaStr.match(/Version\/(\d+\.?\d*).*Safari/);
-              if (mEdge) { b.name = "Edge"; b.version = mEdge[1]; }
-              else if (mOpera) { b.name = "Opera"; b.version = mOpera[1]; }
-              else if (mChrome) { b.name = "Chrome"; b.version = mChrome[1]; }
-              else if (mFirefox) { b.name = "Firefox"; b.version = mFirefox[1]; }
-              else if (mSafariV) { b.name = "Safari"; b.version = mSafariV[1]; }
-
-              // OS
-              const mWin = uaStr.match(/Windows NT (\d+\.\d+)/);
-              const mMac = uaStr.match(/Mac OS X (\d+[_.]\d+(?:[_.]\d+)?)/);
-              const mIOS = uaStr.match(/(?:iPhone|iPad|iPod).*OS (\d+[_\.]\d+(?:[_\.]\d+)?)/);
-              const mAndroid = uaStr.match(/Android (\d+(?:\.\d+)?)/);
-              if (mWin) {
-                const ver = mWin[1];
-                const map: Record<string,string> = {"10.0":"Windows 10/11","6.3":"Windows 8.1","6.2":"Windows 8","6.1":"Windows 7","6.0":"Windows Vista","5.1":"Windows XP","5.2":"Windows XP"};
-                o.name = "Windows"; o.version = map[ver] || ver;
-              } else if (mIOS) {
-                o.name = "iOS"; o.version = mIOS[1].replace(/_/g, ".");
-              } else if (mMac) {
-                o.name = "macOS"; o.version = mMac[1].replace(/_/g, ".");
-              } else if (mAndroid) {
-                o.name = "Android"; o.version = mAndroid[1];
-              } else if (/CrOS/.test(uaStr)) {
-                o.name = "ChromeOS"; o.version = null;
-              } else if (/Linux/.test(uaStr)) {
-                o.name = "Linux"; o.version = null;
-              }
-
-              // Device type
-              if (uaData?.mobile === true || /Mobi|Android/.test(uaStr)) d.type = "mobile";
-              else if (/iPad|Tablet/.test(uaStr)) d.type = "tablet";
-              else d.type = "desktop";
-
-              return { browser: b, os: o, device: d };
-            } catch {
-              return { browser: { name: null, version: null }, os: { name: null, version: null }, device: { type: null } };
-            }
-          }
-
-          const parsed = parseUA(ua);
-
-          // Attempt to derive device model from UA when UA-CH is unavailable
-          const modelFromUA = (() => {
-            try {
-              // Android pattern: "; <MODEL> Build/"
-              const m1 = ua.match(/;\s*([A-Za-z0-9_\- ]+)\s+Build\//);
-              if (m1 && m1[1]) return m1[1].trim();
-              // Google Pixel pattern
-              const mPixel = ua.match(/(Pixel\s+[A-Za-z0-9 ]+)/);
-              if (mPixel && mPixel[1]) return mPixel[1].trim();
-              // iOS devices
-              if (/iPhone/.test(ua)) return "iPhone";
-              if (/iPad/.test(ua)) return "iPad";
-              if (/iPod/.test(ua)) return "iPod";
-              return null;
-            } catch { return null; }
-          })();
-
-          const deviceModel: string | null = (uaHigh?.model && typeof uaHigh.model === "string" && uaHigh.model.trim()) ? uaHigh.model : (modelFromUA || null);
-
-          function inferVendor(osName?: string | null, model?: string | null, uaStr?: string | null): string | null {
-            const m = (model || "").toUpperCase();
-            const u = (uaStr || "").toUpperCase();
-            const os = (osName || "").toUpperCase();
-
-            // iOS devices are Apple
-            if (os.includes("IOS") || /IPHONE|IPAD|IPOD/.test(m) || /IPHONE|IPAD|IPOD/.test(u)) return "Apple";
-
-            // Samsung
-            if (/^SM[-_]/.test(m) || /^GT[-_]/.test(m) || u.includes("SAMSUNG")) return "Samsung";
-
-            // OPPO / realme / OnePlus (BBK group)
-            if (/^CPH/.test(m) || u.includes("OPPO")) return "OPPO";
-            if (/^RMX/.test(m) || u.includes("REALME")) return "realme";
-            if (m.includes("ONEPLUS") || u.includes("ONEPLUS")) return "OnePlus";
-
-            // Xiaomi family
-            if (/(^MI\d+\b)|(^MIX\b)|\bREDMI\b/.test(m) || /\bPOCO\b/.test(m) || u.includes("XIAOMI") || u.includes("REDMI") || u.includes("POCO")) {
-              if (/\bPOCO\b/.test(m) || u.includes("POCO")) return "POCO";
-              if (/\bREDMI\b/.test(m) || u.includes("REDMI")) return "Redmi";
-              return "Xiaomi";
-            }
-
-            // Huawei / Honor
-            if (u.includes("HUAWEI") || /^HUAWEI/.test(m) || /\bVOG-|\bANE-|\bLYA-|\bPRA-|\bELE-/.test(m)) return "Huawei";
-            if (u.includes("HONOR") || /^HONOR/.test(m)) return "Honor";
-
-            // vivo
-            if (u.includes("VIVO") || /^V\d{3,}/.test(m)) return "vivo";
-
-            // Motorola
-            if (u.includes("MOTOROLA") || /^XT\d+/.test(m) || m.startsWith("MOTO")) return "Motorola";
-
-            // Nokia
-            if (u.includes("NOKIA") || /^TA-\d+/.test(m)) return "Nokia";
-
-            // Google Pixel
-            if (m.includes("PIXEL") || u.includes("PIXEL")) return "Google";
-
-            // Sony
-            if (u.includes("SONY") || /^XQ-/.test(m) || m.includes("XPERIA")) return "Sony";
-
-            // LG
-            if (u.includes("LG") || /^LM-/.test(m) || m.startsWith("LGM")) return "LG";
-
-            // ZTE / Nubia
-            if (u.includes("ZTE") || /^NX\d+/.test(m) || u.includes("NUBIA")) return "ZTE";
-
-            // Infinix / Tecno / Itel (Transsion)
-            if (u.includes("INFINIX")) return "Infinix";
-            if (u.includes("TECNO")) return "Tecno";
-            if (u.includes("ITEL")) return "itel";
-
-            return null;
-          }
-
-          const deviceBrand = inferVendor(parsed?.os?.name || null, deviceModel, ua);
-          const oem = (deviceBrand || deviceModel) ? {
-            brand: deviceBrand || null,
-            model: deviceModel || null,
-            source: uaHigh?.model ? "ua-ch" : (modelFromUA ? "ua" : null),
-          } : null;
-
-          // Screen / orientation / viewport
-          const orientation = (() => {
-            try {
-              const so = scr.orientation || win.screen?.orientation;
-              return so ? { type: so.type ?? null, angle: typeof so.angle === "number" ? so.angle : null } : null;
-            } catch { return null; }
-          })();
-          const viewport = (() => {
-            try {
-              const iw = typeof win.innerWidth === "number" ? win.innerWidth : null;
-              const ih = typeof win.innerHeight === "number" ? win.innerHeight : null;
-              return iw && ih ? { width: iw, height: ih } : null;
-            } catch { return null; }
-          })();
-
-          // Network (where supported)
-          const conn = nav.connection || nav.mozConnection || nav.webkitConnection || null;
-          const network = conn ? {
-            type: conn.type ?? null,
-            effectiveType: conn.effectiveType ?? null,
-            downlink: typeof conn.downlink === "number" ? conn.downlink : null,
-            rtt: typeof conn.rtt === "number" ? conn.rtt : null,
-            saveData: typeof conn.saveData === "boolean" ? conn.saveData : null,
-          } : null;
-
-          // Battery (optional)
-          let battery: any = null;
-          try {
-            if (typeof nav.getBattery === "function") {
-              const b = await nav.getBattery();
-              battery = {
-                level: typeof b.level === "number" ? Math.round(b.level * 100) : null,
-                charging: typeof b.charging === "boolean" ? b.charging : null,
-                chargingTime: typeof b.chargingTime === "number" ? b.chargingTime : null,
-                dischargingTime: typeof b.dischargingTime === "number" ? b.dischargingTime : null,
-              };
-            }
-          } catch {}
-
-          // Storage estimate (optional)
-          let storage: any = null;
-          try {
-            if (nav.storage && typeof nav.storage.estimate === "function") {
-              const est = await nav.storage.estimate();
-              storage = {
-                usage: typeof est.usage === "number" ? est.usage : null,
-                quota: typeof est.quota === "number" ? est.quota : null,
-              };
-            }
-          } catch {}
-
-          // GPU (WebGL renderer info)
-          let gpu: any = null;
-          try {
-            const canvas = document.createElement("canvas");
-            const gl: any = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-            if (gl) {
-              const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-              if (dbg) {
-                const vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
-                const renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
-                gpu = { vendor, renderer };
-              }
-            }
-          } catch {}
-
-          const clicks = submitClicksRef?.current || { count: 0, timestamps: [] as string[] };
-
-          return {
-            collectedAt: new Date().toISOString(),
-            userAgent: ua || null,
-            platform: nav.platform ?? null,
-            language: nav.language ?? null,
-            languages: Array.isArray(nav.languages) ? nav.languages : null,
-            vendor: nav.vendor ?? null,
-            deviceMemory: nav.deviceMemory ?? null,
-            hardwareConcurrency: typeof nav.hardwareConcurrency === "number" ? nav.hardwareConcurrency : null,
-            pixelRatio: typeof win.devicePixelRatio === "number" ? win.devicePixelRatio : null,
-            timezone: tz,
-            timezoneOffset: (() => { try { return new Date().getTimezoneOffset(); } catch { return null; } })(),
-            touch: typeof win === "object" ? ("ontouchstart" in win || (nav as any).maxTouchPoints > 0) : null,
-            screen: {
-              width: scr.width ?? null,
-              height: scr.height ?? null,
-              availWidth: scr.availWidth ?? null,
-              availHeight: scr.availHeight ?? null,
-              colorDepth: scr.colorDepth ?? null,
-              pixelDepth: scr.pixelDepth ?? null,
-            },
-            viewport,
-            orientation,
-            uaData,
-            parsed,
-            oem,
-            network,
-            battery,
-            storage,
-            gpu,
-            entrySubmit: {
-              count: typeof clicks.count === "number" ? clicks.count : 0,
-              firstAt: clicks.timestamps && clicks.timestamps.length ? clicks.timestamps[0] : null,
-              lastAt: clicks.timestamps && clicks.timestamps.length ? clicks.timestamps[clicks.timestamps.length - 1] : null,
-              timestamps: Array.isArray(clicks.timestamps) ? clicks.timestamps.slice(0, 20) : [],
-            },
-          };
-        } catch {
-          return null;
-        }
-      }
-
-      const deviceInfo = await collectDeviceInfo();
+      const deviceInfo = await collectDetailedDeviceInfo(submitClicksRef.current);
 
       const requestBody: AccessBody =
         examInfo.access_type === "code_based"
@@ -545,10 +267,10 @@ export default function ExamEntry({
 
       const attemptId = data.attemptId as string;
       const studentNameFromResponse = data.studentName || studentName || "Student";
-      
+
       // Use window.location for better compatibility with old browsers
       const welcomeUrl = `/welcome/${attemptId}?name=${encodeURIComponent(studentNameFromResponse)}`;
-      
+
       // Try modern router first, fallback to window.location
       try {
         router.push(welcomeUrl);

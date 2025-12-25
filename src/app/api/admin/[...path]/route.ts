@@ -69,7 +69,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
         const mod = await import("@/server/admin/attendance");
         const url = new URL(req.url);
         const action = url.searchParams.get("action");
-        
+
         switch (action) {
           case "recent":
             return mod.attendanceRecentGET(req);
@@ -104,6 +104,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
       case "summaries": {
         const mod = await import("@/server/admin/summaries");
         return mod.adminSummariesGET(req);
+      }
+      case "device-fingerprint": {
+        const hash = sub;
+        if (!hash) return NextResponse.json({ error: "fingerprint_hash_required" }, { status: 400 });
+        const mod = await import("@/server/admin/attempts");
+        return (mod as any).attemptsByFingerprintGET(req, hash);
       }
       case "exams": {
         const id = sub;
@@ -146,7 +152,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
   }
 }
 
- 
+
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
   try {
@@ -234,7 +240,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
         const mod = await import("@/server/admin/attendance");
         const url = new URL(req.url);
         const action = url.searchParams.get("action");
-        
+
         switch (action) {
           case "scan":
             return mod.attendanceScanPOST(req);
