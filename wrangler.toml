@@ -1,0 +1,14 @@
+name = "mkexam"
+compatibility_date = "2025-09-09"
+
+[env.production]
+vars = { NODE_ENV = "production" }
+
+[[env.production.bindings]]
+name = "DB"
+type = "d1"
+# You'll need to create a D1 database and add the database_id here
+# database_id = "your-database-id"
+
+[env.production.vars]
+NODE_ENV = "production"
