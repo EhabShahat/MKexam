@@ -17,7 +17,8 @@ export function applyMomentumScrolling(element: HTMLElement): void {
   if (!element) return;
   
   // Apply webkit momentum scrolling for iOS
-  element.style.webkitOverflowScrolling = 'touch';
+  // Using type assertion for vendor-specific property
+  (element.style as any).webkitOverflowScrolling = 'touch';
   
   // Ensure overflow is set
   if (!element.style.overflow && !element.style.overflowY) {
