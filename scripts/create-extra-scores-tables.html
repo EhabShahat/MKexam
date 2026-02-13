@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Extra Scores Tables - Keraza Exam System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1e40af;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+        }
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+        }
+        .alert-info {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #2563eb;
+        }
+        .sql-box {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .step {
+            margin: 30px 0;
+            padding: 20px;
+            border-left: 4px solid #3b82f6;
+            background: #f8fafc;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #1e40af;
+        }
+        .copy-btn {
+            background: #059669;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+        .copy-btn:hover {
+            background: #047857;
+        }
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .inline-flex {
+            display: inline-flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ Fix Missing Extra Scores Tables</h1>
+        
+        <div class="alert alert-error">
+            <strong>Error:</strong> relation "public.extra_scores" does not exist<br>
+            This happens when the extra scores feature tables haven't been created in your Supabase database yet.
+        </div>
+
+        <div class="step">
+            <h3>📋 What This Will Create</h3>
+            <ul>
+                <li><strong>extra_score_fields</strong> - Configuration for custom fields (attendance, homework, etc.)</li>
+                <li><strong>extra_scores</strong> - Student scores for custom fields</li>
+                <li><strong>Indexes</strong> - For performance</li>
+                <li><strong>RLS Policies</strong> - Security policies for admin access</li>
+                <li><strong>App Settings</strong> - Extensions for pass/fail calculation</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>🚀 Method 1: Automatic Creation (Try First)</h3>
+            <p>Click the button below to automatically create the tables using your app's API:</p>
+            
+            <button onclick="createTablesAutomatic()" id="autoBtn" class="inline-flex">
+                <div class="spinner" id="autoSpinner"></div>
+                Create Tables Automatically
+            </button>
+            
+            <div id="autoResult"></div>
+        </div>
+
+        <div class="step">
+            <h3>🔧 Method 2: Manual SQL Execution</h3>
+            <p>If automatic creation fails, copy and run this SQL in your Supabase SQL Editor:</p>
+            
+            <button onclick="copySQL()" class="copy-btn">📋 Copy SQL to Clipboard</button>
+            
+            <div class="sql-box" id="sqlBox">-- Extra scores and public results settings
+-- Safe and idempotent
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Fields catalogue to control order/visibility/labels
+CREATE TABLE IF NOT EXISTS public.extra_score_fields (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key text UNIQUE NOT NULL,
+  label text NOT NULL,
+  type text NOT NULL DEFAULT 'number' CHECK (type IN ('number','text','boolean')),
+  order_index integer NULL,
+  hidden boolean NOT NULL DEFAULT false,
+  include_in_pass boolean NOT NULL DEFAULT false,
+  pass_weight numeric NOT NULL DEFAULT 0,
+  max_points numeric NULL,
+  bool_true_points numeric DEFAULT 100,
+  bool_false_points numeric DEFAULT 0,
+  text_score_map jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Extend fields with scoring configuration (safe if columns already exist)
+ALTER TABLE IF EXISTS public.extra_score_fields
+  ADD COLUMN IF NOT EXISTS bool_true_points numeric DEFAULT 100,
+  ADD COLUMN IF NOT EXISTS bool_false_points numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS text_score_map jsonb DEFAULT '{}'::jsonb;
+
+-- Per-student extra scores stored as a JSON object keyed by field key
+CREATE TABLE IF NOT EXISTS public.extra_scores (
+  student_id uuid PRIMARY KEY REFERENCES public.students(id) ON DELETE CASCADE,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Helpful indexes
+CREATE INDEX IF NOT EXISTS idx_extra_scores_student ON public.extra_scores (student_id);
+
+-- Keep updated_at current
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    new.updated_at := now();
+  ELSIF TG_OP = 'INSERT' THEN
+    IF new.updated_at IS NULL THEN new.updated_at := now(); END IF;
+  END IF;
+  RETURN new;
+END; $$;
+
+CREATE TRIGGER trg_extra_fields_updated
+BEFORE INSERT OR UPDATE ON public.extra_score_fields
+FOR EACH ROW EXECUTE FUNCTION public.tg_set_updated_at();
+
+CREATE TRIGGER trg_extra_scores_updated
+BEFORE INSERT OR UPDATE ON public.extra_scores
+FOR EACH ROW EXECUTE FUNCTION public.tg_set_updated_at();
+
+-- Extend app_settings with public results message and calc configuration
+ALTER TABLE IF EXISTS public.app_settings
+  ADD COLUMN IF NOT EXISTS result_message_hidden boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS result_pass_calc_mode text DEFAULT 'best',
+  ADD COLUMN IF NOT EXISTS result_overall_pass_threshold numeric DEFAULT 60,
+  ADD COLUMN IF NOT EXISTS result_exam_weight numeric DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS result_exam_score_source text DEFAULT 'final',
+  ADD COLUMN IF NOT EXISTS result_fail_on_any_exam boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS result_message_pass text,
+  ADD COLUMN IF NOT EXISTS result_message_fail text,
+  ADD COLUMN IF NOT EXISTS result_message_text text;
+
+-- RLS and policies
+ALTER TABLE IF EXISTS public.extra_score_fields ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.extra_scores ENABLE ROW LEVEL SECURITY;
+
+-- Admin ALL policies
+DO $do$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='extra_score_fields' AND policyname='extra_score_fields_admin_all') THEN
+    EXECUTE 'DROP POLICY extra_score_fields_admin_all ON public.extra_score_fields';
+  END IF;
+  EXECUTE 'CREATE POLICY extra_score_fields_admin_all ON public.extra_score_fields FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin())';
+END $do$;
+
+DO $do$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='extra_scores' AND policyname='extra_scores_admin_all') THEN
+    EXECUTE 'DROP POLICY extra_scores_admin_all ON public.extra_scores';
+  END IF;
+  EXECUTE 'CREATE POLICY extra_scores_admin_all ON public.extra_scores FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin())';
+END $do$;</div>
+        </div>
+
+        <div class="step">
+            <h3>📍 How to Run in Supabase</h3>
+            <ol>
+                <li>Go to your <strong>Supabase Dashboard</strong> → <strong>SQL Editor</strong></li>
+                <li>Click <strong>"New Query"</strong></li>
+                <li>Paste the SQL code above</li>
+                <li>Click <strong>"Run"</strong> button</li>
+                <li>Verify no errors occurred</li>
+                <li>Try deleting a student again</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h3>✅ After Running the SQL</h3>
+            <p>Once the tables are created, you'll be able to:</p>
+            <ul>
+                <li>Delete students without errors</li>
+                <li>Access the <strong>/admin/extra-scores</strong> page</li>
+                <li>Configure attendance tracking and custom fields</li>
+                <li>Set pass/fail criteria with weighted scoring</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function createTablesAutomatic() {
+            const btn = document.getElementById('autoBtn');
+            const spinner = document.getElementById('autoSpinner');
+            const result = document.getElementById('autoResult');
+            
+            btn.disabled = true;
+            spinner.style.display = 'block';
+            btn.innerHTML = '<div class="spinner"></div>Creating Tables...';
+            
+            try {
+                // Try to use the app's admin API to create tables
+                const response = await fetch('/api/admin/data-clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'create_extra_scores_tables'
+                    })
+                });
+                
+                if (response.ok) {
+                    result.innerHTML = '<div class="alert alert-success">✅ Tables created successfully! Try deleting a student now.</div>';
+                } else {
+                    throw new Error('API call failed');
+                }
+            } catch (error) {
+                result.innerHTML = '<div class="alert alert-error">❌ Automatic creation failed. Please use Method 2 (Manual SQL) below.</div>';
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btn.innerHTML = 'Create Tables Automatically';
+            }
+        }
+
+        function copySQL() {
+            const sqlBox = document.getElementById('sqlBox');
+            const text = sqlBox.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                btn.style.background = '#059669';
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#059669';
+                }, 2000);
+            }).catch(() => {
+                alert('Please manually select and copy the SQL code above');
+            });
+        }
+    </script>
+</body>
+</html>

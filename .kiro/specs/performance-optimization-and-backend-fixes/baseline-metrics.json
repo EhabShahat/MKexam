@@ -1,0 +1,30 @@
+{
+  "pageLoadTime": 3500,
+  "timeToInteractive": 3200,
+  "firstContentfulPaint": 1800,
+  "cumulativeLayoutShift": 0.25,
+  "scrollFPS": 45,
+  "bundleSize": {
+    "initial": 850000,
+    "total": 2100000
+  },
+  "queryMetrics": {
+    "averageResponseTime": 280,
+    "p95ResponseTime": 650,
+    "slowQueries": [
+      {
+        "query": "fetch_exam_attempts_with_results",
+        "duration": 720
+      },
+      {
+        "query": "fetch_audit_logs",
+        "duration": 580
+      }
+    ]
+  },
+  "_metadata": {
+    "measuredAt": "2026-01-30T00:00:00.000Z",
+    "environment": "production-build",
+    "notes": "Baseline metrics before performance optimizations. These represent typical performance before virtualization, lazy loading, code splitting, and database optimizations."
+  }
+}

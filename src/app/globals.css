@@ -1,0 +1,1788 @@
+@import "tailwindcss";
+@import "../styles/mobile-scroll.css";
+
+:root {
+  /* Light theme (default) */
+  --background: #f7f8fa; /* app background */
+  --foreground: #0f172a; /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #f3f4f6; /* gray-100 */
+  --muted-foreground: #6b7280; /* gray-500 */
+  --border: #6b7280; /* gray-500 - even darker for 3:1 contrast */
+  --input: #ffffff; /* white - better contrast with border */
+  --ring: #2563eb; /* blue-600 */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #64748b; /* slate-500 */
+  --secondary-foreground: #f8fafc; /* slate-50 */
+  --accent: #22c55e; /* green-500 */
+  --accent-foreground: #052e16; /* green-950 */
+  --destructive: #dc2626; /* red-600 */
+  --destructive-foreground: #ffffff;
+  
+  /* Additional color categories for comprehensive theming */
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --success: #15803d; /* green-700 - even darker for 4.5:1 contrast */
+  --success-foreground: #ffffff;
+  --warning: #c2410c; /* amber-700 - even darker for 4.5:1 contrast */
+  --warning-foreground: #ffffff;
+  --info: #1d4ed8; /* blue-700 - even darker for 4.5:1 contrast */
+  --info-foreground: #ffffff;
+  
+  /* Chart colors */
+  --chart-1: #3b82f6; /* blue-500 */
+  --chart-2: #22c55e; /* green-500 */
+  --chart-3: #f59e0b; /* amber-500 */
+  --chart-4: #8b5cf6; /* violet-500 */
+  --chart-5: #ec4899; /* pink-500 */
+  
+  /* Status colors */
+  --status-draft: #c2410c; /* amber-700 - darker for 3:1 contrast */
+  --status-published: #15803d; /* green-700 - darker for 3:1 contrast */
+  --status-archived: #6b7280; /* gray-500 */
+  
+  /* Additional light mode specific colors for better visual hierarchy */
+  --elevated-surface: #ffffff; /* white - for modals, dropdowns */
+  --hover-overlay: rgba(107, 114, 128, 0.1); /* gray-500 with opacity */
+  --divider: #e5e7eb; /* gray-200 - for subtle dividers */
+  
+  color-scheme: light;
+}
+
+:root.dark {
+  /* Dark theme */
+  --background: #0f172a; /* slate-900 */
+  --foreground: #f1f5f9; /* slate-100 */
+  --card: #1e293b; /* slate-800 */
+  --card-foreground: #f1f5f9; /* slate-100 */
+  --muted: #334155; /* slate-700 */
+  --muted-foreground: #94a3b8; /* slate-400 */
+  --border: #64748b; /* slate-500 - increased brightness for 3:1 contrast */
+  --input: #1e293b; /* slate-800 */
+  --ring: #60a5fa; /* blue-400 */
+  --primary: #60a5fa; /* blue-400 */
+  --primary-foreground: #0f172a; /* slate-900 */
+  --secondary: #94a3b8; /* slate-400 */
+  --secondary-foreground: #0f172a; /* slate-900 */
+  --accent: #34d399; /* green-400 */
+  --accent-foreground: #0f172a; /* slate-900 */
+  --destructive: #f87171; /* red-400 */
+  --destructive-foreground: #0f172a; /* slate-900 */
+  
+  /* Additional color categories for comprehensive theming */
+  --popover: #1e293b; /* slate-800 */
+  --popover-foreground: #f1f5f9; /* slate-100 */
+  --success: #34d399; /* green-400 */
+  --success-foreground: #0f172a; /* slate-900 */
+  --warning: #fbbf24; /* amber-400 */
+  --warning-foreground: #0f172a; /* slate-900 */
+  --info: #60a5fa; /* blue-400 */
+  --info-foreground: #0f172a; /* slate-900 */
+  
+  /* Chart colors - adjusted for dark theme visibility */
+  --chart-1: #60a5fa; /* blue-400 */
+  --chart-2: #34d399; /* green-400 */
+  --chart-3: #fbbf24; /* amber-400 */
+  --chart-4: #a78bfa; /* violet-400 */
+  --chart-5: #f472b6; /* pink-400 */
+  
+  /* Status colors - adjusted for dark theme */
+  --status-draft: #fbbf24; /* amber-400 */
+  --status-published: #34d399; /* green-400 */
+  --status-archived: #94a3b8; /* slate-400 */
+  
+  /* Additional dark mode specific colors for better visual hierarchy */
+  --elevated-surface: #334155; /* slate-700 - for modals, dropdowns */
+  --hover-overlay: rgba(148, 163, 184, 0.1); /* slate-400 with opacity */
+  --divider: #475569; /* slate-600 - for subtle dividers */
+  
+  color-scheme: dark;
+}
+
+/* stylelint-disable at-rule-no-unknown */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --font-sans: var(--font-app-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+/* stylelint-enable at-rule-no-unknown */
+
+/* Smooth theme transitions */
+* {
+  transition: background-color 150ms ease, 
+              color 150ms ease, 
+              border-color 150ms ease,
+              box-shadow 150ms ease;
+}
+
+/* Disable transitions during theme change to prevent flash */
+.theme-transitioning * {
+  transition: none !important;
+}
+
+/* Enhanced mobile compatibility */
+html {
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande';
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent bounce scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* Re-enable selection and callout for form/editable fields */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* Fix for older browsers */
+* {
+  box-sizing: border-box;
+}
+
+*:before,
+*:after {
+  box-sizing: border-box;
+}
+
+/* Mobile-first responsive design */
+@media screen and (max-width: 768px) {
+  html {
+    font-size: 16px; /* Prevent zoom on input focus */
+  }
+  
+  body {
+    font-size: 16px; /* Prevent zoom on input focus */
+  }
+}
+
+/* Fix for very old Android browsers */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    -webkit-text-size-adjust: none;
+  }
+}
+
+/* Arabic text support */
+.rtl {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+.arabic-text {
+  /* Prefer Android-available Arabic fonts first, then iOS/macOS fallbacks */
+  font-family: 'Noto Naskh Arabic', 'Noto Kufi Arabic', 'Droid Arabic Naskh', 'Tajawal', 'Cairo',
+               'Arabic UI Text', 'Geeza Pro', 'Damascus', 'Al Bayan', 'Lucida Grande', 'Segoe UI', sans-serif;
+  line-height: 1.8;
+  /* Important: do not apply additional letter-spacing to Arabic; it breaks glyph joining */
+  letter-spacing: normal;
+  font-variant-ligatures: normal;
+  text-rendering: optimizeLegibility;
+  unicode-bidi: plaintext;
+}
+
+/* Mixed content support */
+.mixed-content {
+  direction: ltr;
+  text-align: left;
+}
+
+.mixed-content .arabic {
+  direction: rtl;
+  display: inline-block;
+  text-align: right;
+}
+
+/* Mobile compatibility fixes */
+.mobile-safe {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for white screen issue on old mobile browsers */
+.page-container {
+  min-height: 100vh;
+  min-height: 100svh;
+  width: 100%;
+  background: var(--background);
+  position: relative;
+}
+
+/* Ensure content is visible on all devices */
+.content-wrapper {
+  width: 100%;
+  max-width: 100vw;
+  padding: 0;
+  margin: 0;
+  background: var(--background);
+}
+
+/* Full width content for mobile - remove centering and max-width constraints */
+@media screen and (max-width: 768px) {
+  .content-wrapper .max-w-4xl {
+    max-width: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* Reduce padding on mobile for more content space */
+  .content-wrapper {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Fix for gradient backgrounds on old browsers */
+.gradient-bg {
+  background: #f7f8fa; /* Fallback */
+  background: var(--background); /* Modern browsers */
+}
+
+/* Loading screen improvements for old browsers */
+.loading-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: #f7f8fa;
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  /* Suppress Next.js auto-scroll warnings for full-screen loading overlay */
+  scroll-behavior: auto;
+}
+
+/* Spinner that works on old browsers */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  -webkit-animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+
+/* ---- Simple UI primitives (work in both Tailwind v4 and plain CSS) ---- */
+
+.label {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  background: var(--input);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem; /* Larger padding for mobile */
+  line-height: 1.5;
+  font-size: 16px; /* Prevent zoom on iOS */
+  transition: box-shadow .15s ease, border-color .15s ease, background .15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* Prevent zoom on focus */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 30%, transparent);
+  background: var(--card);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.75rem 1.25rem; /* Larger padding for mobile */
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 16px; /* Prevent zoom on iOS */
+  min-height: 44px; /* Apple's recommended touch target size */
+  transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  text-decoration: none;
+  /* Prevent text selection */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.btn:hover { background: color-mix(in srgb, var(--card) 85%, var(--foreground) 15%); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn-sm { padding: 0.375rem 0.625rem; border-radius: 8px; font-size: .875rem; }
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: color-mix(in srgb, var(--primary) 80%, black 20%);
+}
+.btn-primary:hover { background: color-mix(in srgb, var(--primary) 85%, black 15%); }
+
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-outline { background: transparent; }
+.btn-destructive {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  border-color: color-mix(in srgb, var(--destructive) 80%, black 20%);
+}
+.btn-destructive:hover { background: color-mix(in srgb, var(--destructive) 85%, black 15%); }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th, .table td { border: 1px solid var(--border); padding: 0.625rem; }
+.table thead th { background: color-mix(in srgb, var(--background) 70%, white 30%); font-weight: 600; }
+.table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--background) 92%, white 8%); }
+
+/* Dark mode table styles */
+:root.dark .table thead th { background: var(--muted); }
+:root.dark .table tbody tr:nth-child(even) { background: rgba(51, 65, 85, 0.3); }
+:root.dark .table tbody tr:hover { background: rgba(51, 65, 85, 0.5); }
+
+.nav-link { color: var(--muted-foreground); font-weight: 500; }
+.nav-link:hover { color: var(--foreground); text-decoration: underline; }
+
+.link { color: var(--primary); font-weight: 500; }
+.link:hover { text-decoration: underline; }
+
+/* Accessibility helpers */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  width: auto;
+  height: auto;
+  background: var(--card);
+  color: var(--foreground);
+  border: 2px solid var(--ring);
+  border-radius: 8px;
+
+/* RTL support for skip link */
+[dir="rtl"] .skip-link {
+  left: auto;
+  right: -9999px;
+}
+[dir="rtl"] .skip-link:focus {
+  left: auto;
+  right: 1rem;
+}
+  padding: 0.5rem 0.75rem;
+  z-index: 1000;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ---- UI enhancements for Admin ---- */
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  border-radius: 9999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.badge-outline { background: transparent; }
+.badge-primary { background: color-mix(in srgb, var(--primary) 15%, white 85%); color: var(--foreground); border-color: color-mix(in srgb, var(--primary) 60%, white 40%); }
+.badge-green { background: color-mix(in srgb, var(--accent) 18%, white 82%); color: var(--foreground); border-color: color-mix(in srgb, var(--accent) 55%, white 45%); }
+.badge-red { background: color-mix(in srgb, var(--destructive) 12%, white 88%); color: var(--foreground); border-color: color-mix(in srgb, var(--destructive) 55%, white 45%); }
+
+/* Status chips */
+.status { border-radius: 9999px; padding: 0.125rem 0.5rem; font-weight: 600; font-size: 0.75rem; border: 1px solid var(--border); }
+.status--draft { background: color-mix(in srgb, var(--muted) 80%, white 20%); color: var(--muted-foreground); }
+.status--published { background: color-mix(in srgb, var(--accent) 15%, white 85%); color: #065f46; }
+.status--archived { background: color-mix(in srgb, #9ca3af 20%, white 80%); color: #374151; }
+
+/* Dark mode status chips */
+:root.dark .status--published { background: rgba(52, 211, 153, 0.2); color: #6ee7b7; }
+:root.dark .status--archived { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+/* Icon button */
+.btn-icon { width: 2.25rem; height: 2.25rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; }
+
+/* Spinner */
+.spinner { width: 1rem; height: 1rem; border-radius: 9999px; border: 2px solid color-mix(in srgb, var(--ring) 30%, transparent); border-top-color: var(--ring); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Inputs with icons */
+.input-with-icon { position: relative; }
+.input-with-icon > .icon { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; }
+.input-with-icon > .input { padding-left: 2rem; }
+
+/* RTL support for input with icon */
+[dir="rtl"] .input-with-icon > .icon { left: auto; right: 0.625rem; }
+[dir="rtl"] .input-with-icon > .input { padding-left: 0.75rem; padding-right: 2rem; }
+
+/* Sticky table header */
+.table-sticky thead th { position: sticky; top: 0; z-index: 2; }
+
+/* Empty state */
+.empty-state { display: grid; place-items: center; padding: 2rem; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 12px; background: color-mix(in srgb, var(--background) 92%, white 8%); }
+
+/* Dark mode empty state */
+:root.dark .empty-state { background: rgba(51, 65, 85, 0.3); }
+
+/* Drag handle affordance */
+.drag-handle { cursor: grab; color: var(--muted-foreground); }
+.drag-handle:active { cursor: grabbing; }
+
+/* Dropzone */
+.dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 1rem; background: color-mix(in srgb, var(--background) 90%, white 10%); text-align: center; }
+.dropzone.dragover { background: color-mix(in srgb, var(--primary) 8%, var(--background) 92%); border-color: var(--primary); }
+
+/* Dark mode dropzone */
+:root.dark .dropzone { background: rgba(51, 65, 85, 0.3); }
+:root.dark .dropzone.dragover { background: rgba(96, 165, 250, 0.15); }
+/* Enhanced Question Management Styles */
+
+/* Modal backdrop */
+.modal-backdrop {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* Dark mode modal backdrop */
+:root.dark .modal-backdrop {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+/* Question card hover effects */
+.question-card {
+  transition: all 0.2s ease;
+}
+
+.question-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Drag and drop enhancements */
+.drag-handle {
+  transition: all 0.2s ease;
+}
+
+.drag-handle:hover {
+  background: var(--muted);
+  transform: scale(1.1);
+}
+
+/* Question type badges with better colors */
+.badge-true-false { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.badge-single-choice { background: #dcfce7; color: #166534; border-color: #86efac; }
+.badge-multiple-choice { background: #f3e8ff; color: #7c3aed; border-color: #c4b5fd; }
+.badge-multi-select { background: #fed7aa; color: #ea580c; border-color: #fdba74; }
+.badge-paragraph { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+
+/* Dark mode badge colors */
+:root.dark .badge-true-false { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border-color: #3b82f6; }
+:root.dark .badge-single-choice { background: rgba(34, 197, 94, 0.2); color: #86efac; border-color: #22c55e; }
+:root.dark .badge-multiple-choice { background: rgba(168, 85, 247, 0.2); color: #c4b5fd; border-color: #a855f7; }
+:root.dark .badge-multi-select { background: rgba(249, 115, 22, 0.2); color: #fdba74; border-color: #f97316; }
+:root.dark .badge-paragraph { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border-color: #64748b; }
+
+/* Form enhancements */
+.form-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.form-section-header {
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Option input styling */
+.option-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  transition: all 0.2s ease;
+}
+
+.option-input-group:hover {
+  border-color: var(--ring);
+  background: color-mix(in srgb, var(--ring) 5%, var(--card) 95%);
+}
+
+.option-letter {
+  width: 2rem;
+  height: 2rem;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* Correct answer selection styling */
+.correct-answer-option {
+  transition: all 0.2s ease;
+}
+
+.correct-answer-option:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--card) 92%);
+}
+
+.correct-answer-option input:checked + .option-content {
+  background: color-mix(in srgb, var(--accent) 15%, var(--card) 85%);
+  border-color: var(--accent);
+}
+
+/* Import preview styling */
+.import-preview-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.import-preview-item:hover {
+  border-color: var(--ring);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Loading skeleton animations */
+@keyframes skeleton-loading {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, color-mix(in srgb, var(--muted) 50%, white 50%) 50%, var(--muted) 75%);
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+/* Dark mode skeleton */
+:root.dark .skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, color-mix(in srgb, var(--muted) 70%, white 30%) 50%, var(--muted) 75%);
+  background-size: 200px 100%;
+}
+
+/* Enhanced empty state */
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+/* Question preview in cards */
+.question-preview {
+  max-height: 4.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.question-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1rem;
+  background: linear-gradient(transparent, var(--card));
+  pointer-events: none;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .question-card .flex {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .question-card .drag-handle {
+    align-self: flex-start;
+  }
+  
+  .modal-content {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100svh - 2rem);
+  }
+  
+  .option-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .option-letter {
+    align-self: flex-start;
+  }
+}
+
+/* Focus improvements for accessibility */
+/* Requirements: 7.2 - Visible focus indicators in both themes */
+.btn:focus-visible,
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Enhanced focus indicators for all interactive elements */
+/* Ensures focus is visible in both light and dark themes with sufficient contrast */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="link"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 20%, transparent);
+}
+
+/* Focus indicators for custom interactive elements */
+.nav-link:focus-visible,
+.link:focus-visible,
+.badge:focus-visible,
+.status:focus-visible,
+.btn-icon:focus-visible,
+.drag-handle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 20%, transparent);
+}
+
+/* Focus indicators for table rows that are clickable */
+.table tbody tr:focus-visible,
+.exam-row:focus-visible,
+.question-card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px; /* Inset for table rows to avoid layout shift */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 20%, transparent);
+}
+
+/* Dark mode focus ring color - ensure sufficient contrast */
+:root.dark a:focus-visible,
+:root.dark button:focus-visible,
+:root.dark [role="button"]:focus-visible,
+:root.dark [role="link"]:focus-visible,
+:root.dark [role="tab"]:focus-visible,
+:root.dark [role="switch"]:focus-visible,
+:root.dark [tabindex]:not([tabindex="-1"]):focus-visible {
+  outline-color: var(--ring); /* blue-400 in dark mode has good contrast */
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.3);
+}
+
+/* Ensure focus indicators are never hidden */
+*:focus-visible {
+  outline-style: solid !important;
+  outline-width: 2px !important;
+}
+
+/* Remove default focus outline only when focus-visible is supported */
+@supports selector(:focus-visible) {
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* Toast notification positioning */
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+}
+
+/* RTL support for toast container */
+[dir="rtl"] .toast-container {
+  right: auto;
+  left: 1rem;
+}
+
+/* Dashboard enhancements */
+.dashboard-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.system-status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+/* RTL support for status indicator */
+[dir="rtl"] .system-status-indicator {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+.system-status-active {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.system-status-disabled {
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+/* Enhanced modal styling */
+.modal-backdrop {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Exam row hover effects */
+.exam-row {
+  transition: all 0.2s ease;
+}
+
+.exam-row:hover {
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+  border-color: var(--ring);
+}
+
+/* Status indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+/* RTL support for status dot */
+[dir="rtl"] .status-dot {
+  margin-right: 0;
+  margin-left: 8px;
+}
+
+.status-dot-published {
+  background: #10b981;
+}
+
+.status-dot-draft {
+  background: #f59e0b;
+}
+
+.status-dot-archived {
+  background: #6b7280;
+}
+
+/* Loading states */
+.skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, color-mix(in srgb, var(--muted) 50%, white 50%) 50%, var(--muted) 75%);
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+/* Enhanced button states */
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-icon:hover {
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+/* Improved focus states - consolidated with enhanced focus indicators above */
+/* This section is kept for backward compatibility but main focus styles are above */
+
+/* Stats card enhancements */
+.stats-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.stats-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Dark mode stats card */
+:root.dark .stats-card {
+  background: var(--card);
+}
+
+:root.dark .stats-card:hover {
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+}
+
+/* ===== INTERACTIVE ELEMENT DISTINCTION (Requirement 7.6) ===== */
+/* Ensure all interactive elements are clearly distinguishable in dark mode */
+
+/* Interactive buttons in dark mode - enhanced hover and active states */
+:root.dark .btn {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+:root.dark .btn:hover {
+  background: color-mix(in srgb, var(--card) 70%, var(--foreground) 30%);
+  border-color: var(--ring);
+}
+
+:root.dark .btn:active {
+  background: color-mix(in srgb, var(--card) 60%, var(--foreground) 40%);
+}
+
+:root.dark .btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+:root.dark .btn-primary:hover {
+  background: color-mix(in srgb, var(--primary) 85%, white 15%);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+}
+
+/* Interactive links in dark mode */
+:root.dark .link,
+:root.dark .nav-link {
+  color: var(--primary);
+}
+
+:root.dark .link:hover,
+:root.dark .nav-link:hover {
+  color: color-mix(in srgb, var(--primary) 80%, white 20%);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+/* Interactive inputs in dark mode - clear visual feedback */
+:root.dark .input,
+:root.dark .select,
+:root.dark .textarea {
+  background: var(--input);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+:root.dark .input:hover,
+:root.dark .select:hover,
+:root.dark .textarea:hover {
+  border-color: var(--ring);
+  background: color-mix(in srgb, var(--input) 90%, var(--foreground) 10%);
+}
+
+:root.dark .input:focus,
+:root.dark .select:focus,
+:root.dark .textarea:focus {
+  background: var(--card);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3);
+}
+
+/* Interactive cards and rows in dark mode */
+:root.dark .card:hover,
+:root.dark .exam-row:hover,
+:root.dark .question-card:hover {
+  background: color-mix(in srgb, var(--card) 85%, var(--foreground) 15%);
+  border-color: var(--ring);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+}
+
+/* Interactive icon buttons in dark mode */
+:root.dark .btn-icon {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+:root.dark .btn-icon:hover {
+  background: color-mix(in srgb, var(--card) 70%, var(--foreground) 30%);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+/* Interactive badges and status indicators in dark mode */
+:root.dark .badge:hover,
+:root.dark .status:hover {
+  background: color-mix(in srgb, var(--muted) 70%, var(--foreground) 30%);
+  border-color: var(--ring);
+}
+
+/* Interactive drag handles in dark mode */
+:root.dark .drag-handle {
+  color: var(--muted-foreground);
+}
+
+:root.dark .drag-handle:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--muted) 70%, var(--foreground) 30%);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+/* Interactive dropzone in dark mode */
+:root.dark .dropzone {
+  background: rgba(51, 65, 85, 0.3);
+  border-color: var(--border);
+}
+
+:root.dark .dropzone:hover,
+:root.dark .dropzone.dragover {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+/* Ensure all clickable elements have cursor pointer */
+.btn,
+.btn-icon,
+.link,
+.nav-link,
+.badge[role="button"],
+.status[role="button"],
+.drag-handle,
+.exam-row[role="button"],
+.question-card[role="button"],
+.dashboard-card {
+  cursor: pointer;
+}
+
+/* Disabled state should be clearly distinguishable */
+:root.dark .btn:disabled,
+:root.dark .input:disabled,
+:root.dark .select:disabled,
+:root.dark .textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+
+/* ===== END INTERACTIVE ELEMENT DISTINCTION ===== */
+
+/* ===== MOBILE COMPATIBILITY FIXES ===== */
+
+/* Fix for old Android browsers (Android 4.x and below) */
+@media screen and (-webkit-min-device-pixel-ratio: 0) and (max-width: 768px) {
+  .gradient-bg {
+    background: #f7f8fa !important;
+  }
+  
+  .btn {
+    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+  }
+  
+  .input, .select, .textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Fix for very old browsers (IE11, old Safari) */
+@supports not (display: grid) {
+  .grid {
+    display: block;
+  }
+  
+  .flex {
+    display: block;
+  }
+  
+  .flex > * {
+    display: inline-block;
+    vertical-align: top;
+  }
+}
+
+/* Fix for browsers that don't support CSS variables */
+@supports not (color: var(--primary)) {
+  :root {
+    --background: #f7f8fa;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --primary: #2563eb;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+  }
+  
+  body {
+    background: #f7f8fa;
+    color: #0f172a;
+  }
+  
+  .btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+  }
+  
+  .card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+  }
+}
+
+/* Mobile-specific improvements */
+@media screen and (max-width: 768px) {
+  /* Prevent horizontal scroll */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+  
+  /* Larger touch targets */
+  .btn, .input, .select, .textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  
+  /* Better spacing on mobile */
+  .p-4 {
+    padding: 1rem;
+  }
+  
+  .p-6 {
+    padding: 1.5rem;
+  }
+  
+  /* Fix for modal on mobile */
+  .modal-content {
+    margin: 0.5rem;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100svh - 1rem);
+  }
+  
+  /* Better sidebar on mobile */
+  .sidebar-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    height: 100svh;
+    z-index: 50;
+  }
+}
+
+/* Fix for iPhone X and newer (safe area) */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-inset {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Utility for applying only top safe area padding (for sticky headers) */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+/* Fix for Samsung Internet and other WebKit browsers */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+  }
+  
+  .btn {
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+  }
+}
+
+/* Fix for UC Browser and other mobile browsers */
+@media screen and (max-width: 768px) {
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Better button styling for touch */
+  button,
+  .btn {
+    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Fix for loading screens */
+  .loading-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100svh;
+    background: #f7f8fa;
+    z-index: 9999;
+    /* Suppress Next.js auto-scroll warnings for full-screen loading overlay */
+    scroll-behavior: auto;
+  }
+}
+
+/* Fix for landscape orientation on mobile */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  .min-h-screen {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+  
+  /* Adjust header height in landscape */
+  .header-mobile {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* Specific fixes for common old mobile browsers */
+
+/* Android Browser 4.x fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .btn {
+    -webkit-transform: translateZ(0); /* Force hardware acceleration */
+    transform: translateZ(0);
+  }
+  
+  .input, .select, .textarea {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Samsung Internet fixes */
+@supports (-webkit-appearance: none) {
+  .input:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}
+
+/* UC Browser fixes */
+@media screen and (max-width: 768px) {
+  /* Force repaint to fix white screen issues */
+  .page-container {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Fix for UC Browser's aggressive caching */
+  .content-wrapper {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Opera Mini fixes */
+@media all and (-webkit-min-device-pixel-ratio: 0) and (min-resolution: .001dpcm) {
+  .gradient-bg {
+    background: #f7f8fa !important;
+  }
+  
+  .loading-spinner {
+    border: 4px solid #e5e7eb !important;
+    border-top: 4px solid #2563eb !important;
+  }
+}
+
+/* Xiaomi Browser fixes */
+@media screen and (max-width: 768px) {
+  /* Fix for Xiaomi's built-in browser */
+  body {
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+  }
+  
+  .btn, .input, .select, .textarea {
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+  }
+}
+
+/* Huawei Browser fixes */
+@supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+  .modal-content {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.95);
+  }
+}
+
+/* Fallback for browsers that don't support svh */
+@supports not (height: 100svh) {
+  .min-h-screen {
+    min-height: 100vh;
+  }
+  
+  .h-screen {
+    height: 100vh;
+  }
+}
+/* Br
+owser-specific fixes to prevent hydration mismatch */
+/* These replace the JavaScript-based fixes that were causing hydration issues */
+
+/* Fix for old Android browsers - prevent white screen */
+/* Removed transform: translateZ(0) as it was blocking touch scrolling on mobile */
+
+/* UC Browser specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    min-height: 100vh;
+    background: #f7f8fa;
+  }
+}
+
+/* Samsung Internet and WebKit browsers - text-size-adjust already set in layout.tsx */
+
+/* Prevent browser extension interference */
+html[data-lt-installed],
+html[data-lt-installed] * {
+  /* Reset any translator extension modifications */
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}/*
+ Mobile-first full width layout */
+@media screen and (max-width: 768px) {
+  /* Make header use full width */
+  .header-mobile > div {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0.75rem !important;
+  }
+  
+  /* Remove unnecessary margins and max-widths on mobile */
+  .page-container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Ensure sidebar takes minimal space on mobile */
+  aside {
+    min-width: 48px !important;
+  }
+  
+  /* Full width main content area */
+  main.content-wrapper {
+    padding: 0.5rem !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Remove centering containers */
+  .mx-auto {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Full width cards and content */
+  .max-w-4xl,
+  .max-w-xl,
+  .max-w-lg {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
+
+/* Body fallback for browsers that don't support svh */
+body {
+  min-height: 100vh; /* Fallback for older browsers */
+  min-height: 100svh; /* Modern browsers with small viewport height support */
+}
+
+/* Screenshot protection for exam pages */
+.exam-protected {
+  /* Prevent screenshots on mobile devices */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  
+  /* Prevent right-click context menu */
+  pointer-events: auto;
+  
+  /* CSS-based screenshot protection */
+  -webkit-app-region: no-drag;
+  
+  /* Additional mobile protection */
+  -webkit-tap-highlight-color: transparent;
+  
+  /* Prevent text selection and copying */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Hide content during screenshot attempts (iOS/Android) */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .exam-protected {
+    /* Additional WebKit-specific protection */
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+/* Screenshot detection overlay */
+.screenshot-warning {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.95);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-size: 1.5rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* Blur content when screenshot is detected */
+.content-blurred {
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+
+/* ===== COMPREHENSIVE DARK MODE SUPPORT ===== */
+
+/* Dark mode for common background colors */
+:root.dark .bg-white { background-color: var(--card) !important; }
+:root.dark .bg-gray-50 { background-color: rgba(51, 65, 85, 0.3) !important; }
+:root.dark .bg-gray-100 { background-color: var(--muted) !important; }
+:root.dark .bg-gray-200 { background-color: #475569 !important; }
+
+/* Dark mode for blue backgrounds */
+:root.dark .bg-blue-50 { background-color: rgba(96, 165, 250, 0.1) !important; }
+:root.dark .bg-blue-100 { background-color: rgba(96, 165, 250, 0.2) !important; }
+:root.dark .bg-blue-600 { background-color: var(--primary) !important; }
+:root.dark .bg-blue-700 { background-color: #2563eb !important; }
+
+/* Dark mode for green backgrounds */
+:root.dark .bg-green-50 { background-color: rgba(52, 211, 153, 0.1) !important; }
+:root.dark .bg-green-100 { background-color: rgba(52, 211, 153, 0.2) !important; }
+:root.dark .bg-green-600 { background-color: var(--accent) !important; }
+:root.dark .bg-emerald-50 { background-color: rgba(52, 211, 153, 0.1) !important; }
+:root.dark .bg-emerald-500 { background-color: var(--accent) !important; }
+
+/* Dark mode for red backgrounds */
+:root.dark .bg-red-50 { background-color: rgba(248, 113, 113, 0.1) !important; }
+:root.dark .bg-red-100 { background-color: rgba(248, 113, 113, 0.2) !important; }
+:root.dark .bg-red-500 { background-color: var(--destructive) !important; }
+:root.dark .bg-red-600 { background-color: #dc2626 !important; }
+
+/* Dark mode for indigo backgrounds */
+:root.dark .bg-indigo-50 { background-color: rgba(129, 140, 248, 0.1) !important; }
+:root.dark .bg-indigo-500 { background-color: #6366f1 !important; }
+:root.dark .bg-indigo-600 { background-color: #4f46e5 !important; }
+
+/* Dark mode for purple backgrounds */
+:root.dark .bg-purple-500 { background-color: #a855f7 !important; }
+
+/* Dark mode for orange backgrounds */
+:root.dark .bg-orange-600 { background-color: #ea580c !important; }
+
+/* Dark mode for yellow backgrounds */
+:root.dark .bg-yellow-50 { background-color: rgba(251, 191, 36, 0.1) !important; }
+
+/* Dark mode for text colors */
+:root.dark .text-gray-900 { color: var(--foreground) !important; }
+:root.dark .text-gray-800 { color: #e2e8f0 !important; }
+:root.dark .text-gray-700 { color: #cbd5e1 !important; }
+:root.dark .text-gray-600 { color: var(--muted-foreground) !important; }
+:root.dark .text-gray-500 { color: #94a3b8 !important; }
+:root.dark .text-gray-400 { color: #64748b !important; }
+
+/* Dark mode for blue text */
+:root.dark .text-blue-600 { color: var(--primary) !important; }
+:root.dark .text-blue-700 { color: #60a5fa !important; }
+:root.dark .text-blue-800 { color: #93c5fd !important; }
+
+/* Dark mode for green text */
+:root.dark .text-green-600 { color: var(--accent) !important; }
+:root.dark .text-green-700 { color: #6ee7b7 !important; }
+:root.dark .text-green-800 { color: #86efac !important; }
+:root.dark .text-green-900 { color: #a7f3d0 !important; }
+:root.dark .text-emerald-500 { color: var(--accent) !important; }
+
+/* Dark mode for red text */
+:root.dark .text-red-600 { color: var(--destructive) !important; }
+:root.dark .text-red-700 { color: #fca5a5 !important; }
+:root.dark .text-red-800 { color: #fecaca !important; }
+
+/* Dark mode for indigo text */
+:root.dark .text-indigo-600 { color: #818cf8 !important; }
+
+/* Dark mode for orange text */
+:root.dark .text-orange-600 { color: #fb923c !important; }
+
+/* Dark mode for borders */
+:root.dark .border-gray-200 { border-color: var(--border) !important; }
+:root.dark .border-gray-300 { border-color: #64748b !important; }
+:root.dark .border-blue-100 { border-color: rgba(96, 165, 250, 0.3) !important; }
+:root.dark .border-blue-200 { border-color: rgba(96, 165, 250, 0.4) !important; }
+:root.dark .border-green-200 { border-color: rgba(52, 211, 153, 0.4) !important; }
+:root.dark .border-red-200 { border-color: rgba(248, 113, 113, 0.4) !important; }
+:root.dark .border-red-500 { border-color: var(--destructive) !important; }
+
+/* Dark mode for hover states */
+:root.dark .hover\:bg-gray-100:hover { background-color: rgba(51, 65, 85, 0.5) !important; }
+:root.dark .hover\:bg-gray-200:hover { background-color: rgba(71, 85, 105, 0.5) !important; }
+:root.dark .hover\:bg-blue-100:hover { background-color: rgba(96, 165, 250, 0.25) !important; }
+:root.dark .hover\:bg-green-100:hover { background-color: rgba(52, 211, 153, 0.25) !important; }
+:root.dark .hover\:bg-green-200:hover { background-color: rgba(52, 211, 153, 0.35) !important; }
+:root.dark .hover\:bg-red-100:hover { background-color: rgba(248, 113, 113, 0.25) !important; }
+:root.dark .hover\:bg-red-200:hover { background-color: rgba(248, 113, 113, 0.35) !important; }
+:root.dark .hover\:text-blue-600:hover { color: var(--primary) !important; }
+:root.dark .hover\:text-red-700:hover { color: #fca5a5 !important; }
+:root.dark .hover\:text-red-800:hover { color: #fecaca !important; }
+
+/* Dark mode for gradients */
+:root.dark .from-blue-50 { --tw-gradient-from: rgba(96, 165, 250, 0.1) !important; }
+:root.dark .to-indigo-50 { --tw-gradient-to: rgba(129, 140, 248, 0.1) !important; }
+:root.dark .from-green-50 { --tw-gradient-from: rgba(52, 211, 153, 0.1) !important; }
+:root.dark .to-emerald-50 { --tw-gradient-to: rgba(52, 211, 153, 0.1) !important; }
+:root.dark .from-blue-600 { --tw-gradient-from: var(--primary) !important; }
+:root.dark .to-blue-700 { --tw-gradient-to: #2563eb !important; }
+
+/* Dark mode for placeholder text */
+:root.dark .placeholder-gray-500::placeholder { color: #64748b !important; }
+
+/* Dark mode for ring colors */
+:root.dark .focus\:ring-blue-500:focus { --tw-ring-color: var(--ring) !important; }
+
+/* Dark mode for divide colors */
+:root.dark .divide-gray-200 > * + * { border-color: var(--border) !important; }
+
+/* Dark mode for backdrop */
+:root.dark .backdrop-blur-sm { backdrop-filter: blur(4px); }
+
+/* Dark mode for shadows - reduce intensity */
+:root.dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important; }
+:root.dark .shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.4) !important; }
+:root.dark .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4) !important; }
+:root.dark .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4) !important; }
+:root.dark .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important; }
+:root.dark .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important; }
+
+
+/* Override gradient backgrounds in dark mode - use solid colors instead */
+:root.dark .bg-gradient-to-br,
+:root.dark .bg-gradient-to-r,
+:root.dark .bg-gradient-to-b,
+:root.dark .bg-gradient-to-l,
+:root.dark .bg-gradient-to-t,
+:root.dark .bg-gradient-to-tr,
+:root.dark .bg-gradient-to-tl,
+:root.dark .bg-gradient-to-bl {
+  background-image: none !important;
+  background: var(--background) !important;
+}
+
+/* Override specific gradient color combinations in dark mode */
+:root.dark .from-slate-50,
+:root.dark .from-blue-50,
+:root.dark .from-indigo-50,
+:root.dark .from-green-50,
+:root.dark .from-emerald-50,
+:root.dark .from-gray-50,
+:root.dark .from-purple-50 {
+  --tw-gradient-from: var(--background) !important;
+  --tw-gradient-to: var(--background) !important;
+  --tw-gradient-stops: var(--background) !important;
+}
+
+:root.dark .via-blue-50,
+:root.dark .via-indigo-50,
+:root.dark .via-purple-50 {
+  --tw-gradient-to: var(--background) !important;
+  --tw-gradient-stops: var(--background) !important;
+}
+
+:root.dark .to-blue-50,
+:root.dark .to-indigo-50,
+:root.dark .to-emerald-50,
+:root.dark .to-green-50,
+:root.dark .to-purple-50,
+:root.dark .to-white {
+  --tw-gradient-to: var(--background) !important;
+}
+
+/* Override gradient text in dark mode */
+:root.dark .bg-clip-text {
+  background-clip: unset !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  color: var(--primary) !important;
+}
+
+/* Fix white backgrounds in dark mode */
+:root.dark .bg-white {
+  background: var(--card) !important;
+}
+
+:root.dark .bg-white\/90,
+:root.dark .bg-white\/80 {
+  background: var(--card) !important;
+  opacity: 0.95;
+}
+
+/* Fix gray backgrounds in dark mode */
+:root.dark .bg-gray-50 {
+  background: var(--muted) !important;
+}
+
+:root.dark .bg-gray-100 {
+  background: var(--muted) !important;
+}
+
+/* Fix border colors in dark mode */
+:root.dark .border-gray-200,
+:root.dark .border-gray-200\/50,
+:root.dark .border-slate-200 {
+  border-color: var(--border) !important;
+}
+
+:root.dark .border-gray-100,
+:root.dark .border-green-100,
+:root.dark .border-blue-100 {
+  border-color: var(--border) !important;
+}
+
+/* Fix text colors in dark mode */
+:root.dark .text-gray-600,
+:root.dark .text-gray-700,
+:root.dark .text-gray-800,
+:root.dark .text-gray-900 {
+  color: var(--foreground) !important;
+}
+
+:root.dark .text-blue-600,
+:root.dark .text-indigo-600 {
+  color: var(--primary) !important;
+}
+
+/* Fix button gradients in dark mode */
+:root.dark .bg-gradient-to-r.from-blue-600 {
+  background: var(--primary) !important;
+  background-image: none !important;
+}
+
+:root.dark .bg-gradient-to-r.from-emerald-600,
+:root.dark .bg-gradient-to-r.from-green-600 {
+  background: var(--success) !important;
+  background-image: none !important;
+}
+
+/* Fix hover states for gradient buttons in dark mode */
+:root.dark .hover\:from-blue-700:hover,
+:root.dark .hover\:to-indigo-700:hover {
+  background: var(--primary) !important;
+  opacity: 0.9;
+}
+
+:root.dark .hover\:from-emerald-700:hover,
+:root.dark .hover\:to-green-700:hover {
+  background: var(--success) !important;
+  opacity: 0.9;
+}

@@ -1,0 +1,260 @@
+/**
+ * Mobile Scroll Optimization Styles
+ * 
+ * Provides CSS utilities for optimizing scroll behavior on mobile devices.
+ * Requirements: 10.1, 10.2, 10.3, 10.5
+ */
+
+/* ===== MOMENTUM SCROLLING (Requirement 10.1) ===== */
+/* Enable momentum scrolling on iOS devices for smooth native-like scrolling */
+
+/* Apply to all scrollable containers */
+.scroll-container,
+[data-scroll-container] {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
+/* Apply to specific scrollable areas */
+.momentum-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure main content areas have momentum scrolling */
+main,
+.main-content,
+.content-area {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== SMOOTH SCROLL ANIMATION (Requirement 10.2) ===== */
+/* Enable smooth scrolling for navigation and programmatic scrolls */
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Smooth scrolling for specific containers */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Disable smooth scroll for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .smooth-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+/* ===== SCROLL CHAINING PREVENTION (Requirement 10.3) ===== */
+/* Prevent scroll events from propagating to parent containers */
+
+/* Apply to nested scrollable containers */
+.scroll-container,
+[data-scroll-container],
+.modal-content,
+.sidebar-content,
+.dropdown-menu {
+  overscroll-behavior: contain;
+}
+
+/* Prevent scroll chaining on specific elements */
+.no-scroll-chain {
+  overscroll-behavior: contain;
+}
+
+/* ===== PULL-TO-REFRESH PREVENTION (Requirement 10.5) ===== */
+/* Prevent browser's default pull-to-refresh behavior */
+
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Prevent pull-to-refresh on main content areas */
+main,
+.main-content,
+.exam-container,
+.question-container {
+  overscroll-behavior-y: contain;
+}
+
+/* ===== MOBILE-SPECIFIC SCROLL OPTIMIZATIONS ===== */
+
+@media screen and (max-width: 768px) {
+  /* Ensure all scrollable areas have momentum scrolling on mobile */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Optimize scroll performance on mobile */
+  .scroll-container,
+  [data-scroll-container] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent overscroll on mobile body */
+  body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: contain;
+  }
+  
+  /* Optimize modal scrolling on mobile */
+  .modal-content,
+  .mobile-modal {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Optimize sidebar scrolling on mobile */
+  .sidebar,
+  .mobile-sidebar {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* ===== SCROLL UTILITIES ===== */
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar styling for better mobile experience */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+}
+
+/* Scroll snap for better mobile navigation */
+.scroll-snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-y {
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-start {
+  scroll-snap-align: start;
+}
+
+.scroll-snap-center {
+  scroll-snap-align: center;
+}
+
+.scroll-snap-end {
+  scroll-snap-align: end;
+}
+
+/* Prevent scroll during loading or transitions */
+.scroll-locked {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Optimize scroll performance with GPU acceleration */
+.scroll-optimized {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: scroll-position;
+}
+
+/* ===== SCROLL INDICATORS ===== */
+
+/* Fade indicator at bottom of scrollable content */
+.scroll-fade-bottom {
+  position: relative;
+}
+
+.scroll-fade-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2rem;
+  background: linear-gradient(to bottom, transparent, var(--background));
+  pointer-events: none;
+}
+
+/* Fade indicator at top of scrollable content */
+.scroll-fade-top {
+  position: relative;
+}
+
+.scroll-fade-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2rem;
+  background: linear-gradient(to top, transparent, var(--background));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ===== ACCESSIBILITY ===== */
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: auto !important;
+  }
+}
+
+/* ===== BROWSER-SPECIFIC FIXES ===== */
+
+/* Fix for Safari iOS momentum scrolling issues */
+@supports (-webkit-overflow-scrolling: touch) {
+  .scroll-container,
+  [data-scroll-container] {
+    -webkit-overflow-scrolling: touch;
+    /* Force hardware acceleration */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Fix for Chrome Android overscroll glow */
+@media screen and (max-width: 768px) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+  
+  * {
+    overscroll-behavior: contain;
+  }
+}
