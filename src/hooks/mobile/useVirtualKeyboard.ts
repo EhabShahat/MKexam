@@ -47,7 +47,7 @@ export function useVirtualKeyboard(
   });
 
   const previousHeightRef = useRef<number>(0);
-  const restoreTimeoutRef = useRef<NodeJS.Timeout>();
+  const restoreTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   /**
    * Calculate keyboard height from viewport changes
