@@ -1,0 +1,72 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireAdmin, getBearerToken } from "@/lib/admin";
+import { invalidateExamMetadata, invalidateExamQuestions, invalidateExamIPRules } from "@/lib/cachedQueries";
+
+export async function examsIdGET(req: NextRequest, examId: string) {
+  try {
+    await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+    const { data, error } = await svc.from("exams").select("*").eq("id", examId).single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    return NextResponse.json({ item: data });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+export async function examsIdPATCH(req: NextRequest, examId: string) {
+  try {
+    await requireAdmin(req);
+    const body = await req.json().catch(() => ({}));
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+
+    // Auto-set archived_at when archiving
+    if (body.is_archived === true && !body.archived_at) {
+      body.archived_at = new Date().toISOString();
+    }
+    // Clear archived_at when unarchiving
+    if (body.is_archived === false) {
+      body.archived_at = null;
+    }
+
+    const { data, error } = await svc
+      .from("exams")
+      .update(body)
+      .eq("id", examId)
+      .select("*")
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    
+    // Invalidate exam metadata cache on update
+    invalidateExamMetadata(examId);
+    
+    return NextResponse.json({ item: data });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
+
+export async function examsIdDELETE(req: NextRequest, examId: string) {
+  try {
+    await requireAdmin(req);
+    const token = await getBearerToken(req);
+    const svc = supabaseServer(token || undefined);
+    const { error } = await svc.from("exams").delete().eq("id", examId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    
+    // Invalidate all caches related to this exam on delete
+    invalidateExamMetadata(examId);
+    invalidateExamQuestions(examId);
+    invalidateExamIPRules(examId);
+    
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ error: e?.message || "unexpected_error" }, { status: 500 });
+  }
+}
